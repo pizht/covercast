@@ -1,21 +1,16 @@
 /**
- * @file Alignment guides, snap engine, and spacing measurements.
+ * @file Alignment guides and spacing measurements.
  *
  * Computes visual guide lines (canvas edges/centers and element-to-element
- * alignments), an axis-aware snap engine with hysteresis to keep snapping
- * stable, spacing/distance measurement guides between elements, and a
- * resize-specific snap engine. Optimized variants delegate to a
- * `SpatialIndex` so only nearby elements are considered.
+ * alignments) and spacing/distance measurement guides between elements.
+ * Optimized variants delegate to a `SpatialIndex` so only nearby elements
+ * are considered.
  */
 
 import { DEFAULT_CANVAS_HEIGHT, DEFAULT_CANVAS_WIDTH, type Rect } from './scene'
 import { SpatialIndex } from './spatial-index'
 
 export type GuideMode = 'drag' | 'keyboard'
-
-export type GuideContext = {
-  mode: GuideMode
-}
 
 export type GuideDirection = 'horizontal' | 'vertical'
 
@@ -55,19 +50,7 @@ export type MeasurementGuide = {
   mode?: GuideMode
 }
 
-export type ResizeLabel = {
-  x: number
-  y: number
-  w: number
-  h: number
-}
-
 const DEFAULT_THRESHOLD = 5
-
-export type CanvasSizeOptions = {
-  canvasWidth?: number
-  canvasHeight?: number
-}
 
 /**
  * Computes alignment guide lines for the dragged rect against canvas edges
@@ -338,199 +321,6 @@ export function computeGuides(
   }
 
   return guides
-}
-
-// --- Snap engine types ---
-
-export type AxisSnapState = {
-  type: GuideType
-  target: number
-} | null
-
-export type SnapState = {
-  x: AxisSnapState
-  y: AxisSnapState
-}
-
-export type SnapResult = {
-  snappedRect: Rect
-  guides: GuideLine[]
-  snapDx: number
-  snapDy: number
-  snapState: SnapState
-}
-
-type SnapCandidate = {
-  delta: number
-  type: GuideType
-}
-
-export const SNAP_THRESHOLD = 5
-export const SNAP_HYSTERESIS = 10
-
-/**
- * Creates an empty snap state (no active snap on either axis).
- * @returns A fresh `SnapState` with `x` and `y` set to `null`.
- */
-export function createSnapState(): SnapState {
-  return { x: null, y: null }
-}
-
-/**
- * Computes the snapped position for a dragged rect, considering canvas edges
- * and other rects. Honors a previous snap with hysteresis to avoid jitter,
- * then falls back to the closest candidate within `threshold`.
- * @param rawRect - The unsnapped rect from the pointer.
- * @param others - Other rects to snap against.
- * @param prevSnap - Snap state from the previous frame for hysteresis.
- * @param threshold - Pixel tolerance for snap candidates. Defaults to `SNAP_THRESHOLD`.
- * @param hysteresis - Pixel tolerance for keeping a previous snap. Defaults to `SNAP_HYSTERESIS`.
- * @param canvasWidth - Canvas width for edge/center snapping.
- * @param canvasHeight - Canvas height for edge/center snapping.
- * @returns A `SnapResult` containing the snapped rect, deltas, guides, and new snap state.
- */
-export function computeSnap(
-  rawRect: Rect,
-  others: Rect[],
-  prevSnap: SnapState | null = null,
-  threshold = SNAP_THRESHOLD,
-  hysteresis = SNAP_HYSTERESIS,
-  canvasWidth = DEFAULT_CANVAS_WIDTH,
-  canvasHeight = DEFAULT_CANVAS_HEIGHT,
-): SnapResult {
-  const nextSnap: SnapState = { x: null, y: null }
-  let snapDx = 0
-  let snapDy = 0
-
-  const dLeft = rawRect.x
-  const dCenterH = rawRect.x + rawRect.width / 2
-  const dRight = rawRect.x + rawRect.width
-  const dTop = rawRect.y
-  const dCenterV = rawRect.y + rawRect.height / 2
-  const dBottom = rawRect.y + rawRect.height
-
-  const xCandidates: SnapCandidate[] = []
-  const yCandidates: SnapCandidate[] = []
-
-  const canvasCx = canvasWidth / 2
-  const canvasCy = canvasHeight / 2
-
-  if (Math.abs(dLeft - 0) < threshold) {
-    xCandidates.push({ delta: 0 - dLeft, type: 'left' })
-  }
-
-  if (Math.abs(dRight - canvasWidth) < threshold) {
-    xCandidates.push({ delta: canvasWidth - dRight, type: 'right' })
-  }
-
-  if (Math.abs(dCenterH - canvasCx) < threshold) {
-    xCandidates.push({ delta: canvasCx - dCenterH, type: 'center-h' })
-  }
-
-  if (Math.abs(dTop - 0) < threshold) {
-    yCandidates.push({ delta: 0 - dTop, type: 'top' })
-  }
-
-  if (Math.abs(dBottom - canvasHeight) < threshold) {
-    yCandidates.push({ delta: canvasHeight - dBottom, type: 'bottom' })
-  }
-
-  if (Math.abs(dCenterV - canvasCy) < threshold) {
-    yCandidates.push({ delta: canvasCy - dCenterV, type: 'center-v' })
-  }
-
-  for (const other of others) {
-    const oLeft = other.x
-    const oCenterH = other.x + other.width / 2
-    const oRight = other.x + other.width
-    const oTop = other.y
-    const oCenterV = other.y + other.height / 2
-    const oBottom = other.y + other.height
-
-    const dxLoLo = oLeft - dLeft
-    const dxLoRo = oRight - dLeft
-    const dxCoCo = oCenterH - dCenterH
-    const dxCoLo = oLeft - dCenterH
-    const dxCoRo = oRight - dCenterH
-    const dxRoRo = oRight - dRight
-    const dxRoLo = oLeft - dRight
-
-    const dyToTo = oTop - dTop
-    const dyToBo = oBottom - dTop
-    const dyCvCv = oCenterV - dCenterV
-    const dyCvTo = oTop - dCenterV
-    const dyCvBo = oBottom - dCenterV
-    const dyBoBo = oBottom - dBottom
-    const dyBoTo = oTop - dBottom
-
-    if (Math.abs(dxLoLo) < threshold) xCandidates.push({ delta: dxLoLo, type: 'left' })
-    if (Math.abs(dxLoRo) < threshold) xCandidates.push({ delta: dxLoRo, type: 'left' })
-    if (Math.abs(dxCoCo) < threshold) xCandidates.push({ delta: dxCoCo, type: 'center-h' })
-    if (Math.abs(dxCoLo) < threshold) xCandidates.push({ delta: dxCoLo, type: 'center-h' })
-    if (Math.abs(dxCoRo) < threshold) xCandidates.push({ delta: dxCoRo, type: 'center-h' })
-    if (Math.abs(dxRoRo) < threshold) xCandidates.push({ delta: dxRoRo, type: 'right' })
-    if (Math.abs(dxRoLo) < threshold) xCandidates.push({ delta: dxRoLo, type: 'right' })
-
-    if (Math.abs(dyToTo) < threshold) yCandidates.push({ delta: dyToTo, type: 'top' })
-    if (Math.abs(dyToBo) < threshold) yCandidates.push({ delta: dyToBo, type: 'top' })
-    if (Math.abs(dyCvCv) < threshold) yCandidates.push({ delta: dyCvCv, type: 'center-v' })
-    if (Math.abs(dyCvTo) < threshold) yCandidates.push({ delta: dyCvTo, type: 'center-v' })
-    if (Math.abs(dyCvBo) < threshold) yCandidates.push({ delta: dyCvBo, type: 'center-v' })
-    if (Math.abs(dyBoBo) < threshold) yCandidates.push({ delta: dyBoBo, type: 'bottom' })
-    if (Math.abs(dyBoTo) < threshold) yCandidates.push({ delta: dyBoTo, type: 'bottom' })
-  }
-
-  const prevX = prevSnap?.x ?? null
-  if (prevX) {
-    const rawDiff = Math.abs(rawRect.x - prevX.target)
-    if (rawDiff < hysteresis) {
-      snapDx = prevX.target - rawRect.x
-      nextSnap.x = prevX
-    }
-  }
-
-  if (nextSnap.x === null && xCandidates.length > 0) {
-    xCandidates.sort((a, b) => Math.abs(a.delta) - Math.abs(b.delta))
-    const best = xCandidates[0]
-    snapDx = best.delta
-    nextSnap.x = { type: best.type, target: rawRect.x + best.delta }
-  }
-
-  const prevY = prevSnap?.y ?? null
-  if (prevY) {
-    const rawDiff = Math.abs(rawRect.y - prevY.target)
-    if (rawDiff < hysteresis) {
-      snapDy = prevY.target - rawRect.y
-      nextSnap.y = prevY
-    }
-  }
-
-  if (nextSnap.y === null && yCandidates.length > 0) {
-    yCandidates.sort((a, b) => Math.abs(a.delta) - Math.abs(b.delta))
-    const best = yCandidates[0]
-    snapDy = best.delta
-    nextSnap.y = { type: best.type, target: rawRect.y + best.delta }
-  }
-
-  const snappedRect: Rect = {
-    x: rawRect.x + snapDx,
-    y: rawRect.y + snapDy,
-    width: rawRect.width,
-    height: rawRect.height,
-  }
-
-  const guides =
-    snappedRect.x !== rawRect.x || snappedRect.y !== rawRect.y
-      ? computeGuides(snappedRect, others, threshold, canvasWidth, canvasHeight)
-      : []
-
-  return {
-    snappedRect,
-    guides,
-    snapDx,
-    snapDy,
-    snapState: nextSnap,
-  }
 }
 
 const SPACING_ALIGN_THRESHOLD = 5
@@ -896,144 +686,6 @@ function findNearestEdge(value: number, min: number, max: number): number {
   return distToMin <= distToMax ? min : max
 }
 
-// --- Resize snap engine ---
-
-export type AxisResizeSnapState = {
-  type: GuideType
-  target: number
-} | null
-
-export type ResizeSnapState = {
-  w: AxisResizeSnapState
-  h: AxisResizeSnapState
-}
-
-export type ResizeSnapResult = {
-  snappedWidth: number
-  snappedHeight: number
-  snapDw: number
-  snapDh: number
-  snapState: ResizeSnapState
-}
-
-/**
- * Creates an empty resize snap state (no active snap on either dimension).
- * @returns A fresh `ResizeSnapState` with `w` and `h` set to `null`.
- */
-export function createResizeSnapState(): ResizeSnapState {
-  return { w: null, h: null }
-}
-
-/**
- * Computes snapped width/height for a resize gesture, considering canvas
- * edges, canvas centers, and other rects' right/bottom edges. Honors a
- * previous snap with hysteresis before falling back to the closest
- * candidate within `threshold`.
- * @param rawRect - The unsnapped rect from the pointer.
- * @param others - Other rects to snap against.
- * @param prevSnap - Snap state from the previous frame for hysteresis.
- * @param threshold - Pixel tolerance for snap candidates. Defaults to `SNAP_THRESHOLD`.
- * @param hysteresis - Pixel tolerance for keeping a previous snap. Defaults to `SNAP_HYSTERESIS`.
- * @param canvasWidth - Canvas width for edge/center snapping.
- * @param canvasHeight - Canvas height for edge/center snapping.
- * @returns A `ResizeSnapResult` with snapped dimensions, deltas, and new snap state.
- */
-export function computeResizeSnap(
-  rawRect: Rect,
-  others: Rect[],
-  prevSnap: ResizeSnapState | null = null,
-  threshold = SNAP_THRESHOLD,
-  hysteresis = SNAP_HYSTERESIS,
-  canvasWidth = DEFAULT_CANVAS_WIDTH,
-  canvasHeight = DEFAULT_CANVAS_HEIGHT,
-): ResizeSnapResult {
-  let snapDw = 0
-  let snapDh = 0
-  const nextSnap: ResizeSnapState = { w: null, h: null }
-
-  const dRight = rawRect.x + rawRect.width
-  const dBottom = rawRect.y + rawRect.height
-
-  const wCandidates: SnapCandidate[] = []
-  const hCandidates: SnapCandidate[] = []
-
-  const canvasCx = canvasWidth / 2
-  const canvasCy = canvasHeight / 2
-
-  if (Math.abs(dRight - canvasWidth) < threshold) {
-    wCandidates.push({ delta: canvasWidth - dRight, type: 'right' })
-  }
-
-  if (Math.abs(rawRect.x + rawRect.width / 2 - canvasCx) < threshold) {
-    wCandidates.push({ delta: canvasCx * 2 - rawRect.x - rawRect.width, type: 'center-h' })
-  }
-
-  if (Math.abs(dBottom - canvasHeight) < threshold) {
-    hCandidates.push({ delta: canvasHeight - dBottom, type: 'bottom' })
-  }
-
-  if (Math.abs(rawRect.y + rawRect.height / 2 - canvasCy) < threshold) {
-    hCandidates.push({ delta: canvasCy * 2 - rawRect.y - rawRect.height, type: 'center-v' })
-  }
-
-  for (const other of others) {
-    const oLeft = other.x
-    const oRight = other.x + other.width
-    const oTop = other.y
-    const oBottom = other.y + other.height
-
-    const dwRoRo = oRight - dRight
-    const dwRoLo = oLeft - dRight
-    const dhBoBo = oBottom - dBottom
-    const dhBoTo = oTop - dBottom
-
-    if (Math.abs(dwRoRo) < threshold) wCandidates.push({ delta: dwRoRo, type: 'right' })
-    if (Math.abs(dwRoLo) < threshold) wCandidates.push({ delta: dwRoLo, type: 'right' })
-    if (Math.abs(dhBoBo) < threshold) hCandidates.push({ delta: dhBoBo, type: 'bottom' })
-    if (Math.abs(dhBoTo) < threshold) hCandidates.push({ delta: dhBoTo, type: 'bottom' })
-  }
-
-  const prevW = prevSnap?.w ?? null
-  if (prevW) {
-    const rawDiff = Math.abs(rawRect.width - prevW.target)
-    if (rawDiff < hysteresis) {
-      snapDw = prevW.target - rawRect.width
-      nextSnap.w = prevW
-    }
-  }
-
-  if (nextSnap.w === null && wCandidates.length > 0) {
-    wCandidates.sort((a, b) => Math.abs(a.delta) - Math.abs(b.delta))
-    const best = wCandidates[0]
-    snapDw = best.delta
-    nextSnap.w = { type: best.type, target: rawRect.width + best.delta }
-  }
-
-  const prevH = prevSnap?.h ?? null
-  if (prevH) {
-    const rawDiff = Math.abs(rawRect.height - prevH.target)
-    if (rawDiff < hysteresis) {
-      snapDh = prevH.target - rawRect.height
-      nextSnap.h = prevH
-    }
-  }
-
-  if (nextSnap.h === null && hCandidates.length > 0) {
-    hCandidates.sort((a, b) => Math.abs(a.delta) - Math.abs(b.delta))
-    const best = hCandidates[0]
-    snapDh = best.delta
-    nextSnap.h = { type: best.type, target: rawRect.height + best.delta }
-  }
-
-  return {
-    snappedWidth: rawRect.width + snapDw,
-    snappedHeight: rawRect.height + snapDh,
-    snapDw,
-    snapDh,
-    snapState: nextSnap,
-  }
-}
-
 const GUIDE_QUERY_RANGE = 200
 
 /**
@@ -1058,39 +710,6 @@ export function computeGuidesOptimized(
 }
 
 /**
- * Spatial-index-accelerated variant of {@link computeSnap}. Only elements
- * within `GUIDE_QUERY_RANGE` pixels of `rawRect` are considered.
- * @param rawRect - The unsnapped rect from the pointer.
- * @param spatialIndex - Index of all candidate rects.
- * @param prevSnap - Snap state from the previous frame for hysteresis.
- * @param threshold - Pixel tolerance for snap candidates. Defaults to `SNAP_THRESHOLD`.
- * @param hysteresis - Pixel tolerance for keeping a previous snap. Defaults to `SNAP_HYSTERESIS`.
- * @param canvasWidth - Canvas width for edge/center snapping.
- * @param canvasHeight - Canvas height for edge/center snapping.
- * @returns A `SnapResult` containing the snapped rect, deltas, guides, and new snap state.
- */
-export function computeSnapOptimized(
-  rawRect: Rect,
-  spatialIndex: SpatialIndex,
-  prevSnap: SnapState | null = null,
-  threshold = SNAP_THRESHOLD,
-  hysteresis = SNAP_HYSTERESIS,
-  canvasWidth = DEFAULT_CANVAS_WIDTH,
-  canvasHeight = DEFAULT_CANVAS_HEIGHT,
-): SnapResult {
-  const nearbyRects = spatialIndex.queryNearby(rawRect, GUIDE_QUERY_RANGE)
-  return computeSnap(
-    rawRect,
-    nearbyRects,
-    prevSnap,
-    threshold,
-    hysteresis,
-    canvasWidth,
-    canvasHeight,
-  )
-}
-
-/**
  * Spatial-index-accelerated variant of {@link computeSpacingGuides}. Only
  * elements within `GUIDE_QUERY_RANGE` pixels of `dragged` are considered.
  * @param dragged - The rect currently being dragged.
@@ -1105,37 +724,4 @@ export function computeSpacingGuidesOptimized(
 ): MeasurementGuide[] {
   const nearbyRects = spatialIndex.queryNearby(dragged, GUIDE_QUERY_RANGE)
   return computeSpacingGuides(dragged, nearbyRects, alignThreshold)
-}
-
-/**
- * Spatial-index-accelerated variant of {@link computeResizeSnap}. Only
- * elements within `GUIDE_QUERY_RANGE` pixels of `rawRect` are considered.
- * @param rawRect - The unsnapped rect from the pointer.
- * @param spatialIndex - Index of all candidate rects.
- * @param prevSnap - Snap state from the previous frame for hysteresis.
- * @param threshold - Pixel tolerance for snap candidates. Defaults to `SNAP_THRESHOLD`.
- * @param hysteresis - Pixel tolerance for keeping a previous snap. Defaults to `SNAP_HYSTERESIS`.
- * @param canvasWidth - Canvas width for edge/center snapping.
- * @param canvasHeight - Canvas height for edge/center snapping.
- * @returns A `ResizeSnapResult` with snapped dimensions, deltas, and new snap state.
- */
-export function computeResizeSnapOptimized(
-  rawRect: Rect,
-  spatialIndex: SpatialIndex,
-  prevSnap: ResizeSnapState | null = null,
-  threshold = SNAP_THRESHOLD,
-  hysteresis = SNAP_HYSTERESIS,
-  canvasWidth = DEFAULT_CANVAS_WIDTH,
-  canvasHeight = DEFAULT_CANVAS_HEIGHT,
-): ResizeSnapResult {
-  const nearbyRects = spatialIndex.queryNearby(rawRect, GUIDE_QUERY_RANGE)
-  return computeResizeSnap(
-    rawRect,
-    nearbyRects,
-    prevSnap,
-    threshold,
-    hysteresis,
-    canvasWidth,
-    canvasHeight,
-  )
 }

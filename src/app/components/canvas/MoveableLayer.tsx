@@ -2,71 +2,79 @@
 
 import dynamic from 'next/dynamic'
 import { flushSync } from 'react-dom'
-import { useEffect, useLayoutEffect, useMemo, useState, type Ref } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type Ref } from 'react'
 import type {
+  MoveableProps,
   OnDrag,
   OnDragEnd,
   OnDragGroup,
   OnDragGroupEnd,
   OnDragGroupStart,
   OnDragStart,
-  OnResize,
-  OnResizeEnd,
-  OnResizeGroup,
-  OnResizeGroupEnd,
-  OnResizeGroupStart,
-  OnResizeStart,
+  OnScale,
+  OnScaleEnd,
+  OnScaleGroup,
+  OnScaleGroupEnd,
+  OnScaleGroupStart,
+  OnScaleStart,
 } from 'react-moveable'
 
 const Moveable = dynamic(() => import('react-moveable').then((mod) => mod.default), {
   ssr: false,
-})
+}) as React.ComponentType<MoveableProps & { ref?: React.Ref<{ updateRect: () => void }> }>
 
 type MoveableLayerProps = {
   svgRef?: Ref<SVGSVGElement> | null
+  containerRef?: Ref<HTMLDivElement> | null
   targetElementIds: string[]
   snapTargetIds: string[]
   canvasWidth: number
   canvasHeight: number
+  refreshKey?: string
   enabled?: boolean
   onDragStart?: () => void
   onDrag?: (translateX: number, translateY: number) => void
   onDragEnd?: (isDrag: boolean) => void
-  onResizeStart?: () => void
-  onResize?: (width: number, height: number) => void
-  onResizeEnd?: (isDrag: boolean) => void
+  onScaleStart?: () => void
+  onScale?: (width: number, height: number) => void
+  onScaleEnd?: (isDrag: boolean) => void
   onGroupDragStart?: () => void
   onGroupDrag?: (translateX: number, translateY: number) => void
   onGroupDragEnd?: (isDrag: boolean) => void
-  onGroupResizeStart?: () => void
-  onGroupResize?: (groupWidth: number, groupHeight: number) => void
-  onGroupResizeEnd?: (isDrag: boolean) => void
+  onGroupScaleStart?: () => void
+  onGroupScale?: (groupWidth: number, groupHeight: number) => void
+  onGroupScaleEnd?: (isDrag: boolean) => void
 }
 
 export function MoveableLayer({
   svgRef,
+  containerRef,
   targetElementIds,
   snapTargetIds,
   canvasWidth,
+  refreshKey = '',
   enabled = false,
   onDragStart,
   onDrag,
   onDragEnd,
-  onResizeStart,
-  onResize,
-  onResizeEnd,
+  onScaleStart,
+  onScale,
+  onScaleEnd,
   onGroupDragStart,
   onGroupDrag,
   onGroupDragEnd,
-  onGroupResizeStart,
-  onGroupResize,
-  onGroupResizeEnd,
+  onGroupScaleStart,
+  onGroupScale,
+  onGroupScaleEnd,
 }: MoveableLayerProps) {
   const [targets, setTargets] = useState<SVGGElement[]>([])
   const [snapTargets, setSnapTargets] = useState<SVGGElement[]>([])
   const [zoom, setZoom] = useState(1)
+  const [shiftPressed, setShiftPressed] = useState(false)
+  const moveableRef = useRef<{ updateRect: () => void } | null>(null)
 
   const svgEl = (svgRef as React.RefObject<SVGSVGElement> | null)?.current ?? null
+  const containerEl = (containerRef as React.RefObject<HTMLDivElement> | null)?.current ?? null
 
   useLayoutEffect(() => {
     if (!enabled || !svgEl || targetElementIds.length === 0) {
@@ -111,78 +119,151 @@ export function MoveableLayer({
     }
   }, [svgEl, canvasWidth, svgRef])
 
+  useEffect(() => {
+    if (!enabled) {
+      return
+    }
+    function handleKeyDown(e: KeyboardEvent) {
+      if (e.key === 'Shift') {
+        setShiftPressed(true)
+      }
+    }
+    function handleKeyUp(e: KeyboardEvent) {
+      if (e.key === 'Shift') {
+        setShiftPressed(false)
+      }
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    window.addEventListener('keyup', handleKeyUp)
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown)
+      window.removeEventListener('keyup', handleKeyUp)
+    }
+  }, [enabled])
+
+  useEffect(() => {
+    if (!enabled || effectiveTargets.length === 0) {
+      return
+    }
+    // refreshKey 变化时（方向键移动元素后）强制 Moveable 重新读取目标位置
+    moveableRef.current?.updateRect()
+  }, [refreshKey, enabled, effectiveTargets.length])
+
   const elementGuidelines = useMemo(
     () => snapTargets.map((element) => ({ element, refresh: true })),
     [snapTargets],
   )
 
-  if (!enabled || effectiveTargets.length === 0) {
+  const handleDragStart = useCallback(
+    (e: OnDragStart) => {
+      e.set([0, 0])
+      onDragStart?.()
+    },
+    [onDragStart],
+  )
+
+  const handleDrag = useCallback(
+    (e: OnDrag) => {
+      const [tx, ty] = e.translate
+      onDrag?.(tx, ty)
+    },
+    [onDrag],
+  )
+
+  const handleDragEnd = useCallback(
+    (e: OnDragEnd) => {
+      onDragEnd?.(e.isDrag)
+    },
+    [onDragEnd],
+  )
+
+  const handleScaleStart = useCallback(
+    (e: OnScaleStart) => {
+      e.set([1, 1])
+      onScaleStart?.()
+    },
+    [onScaleStart],
+  )
+
+  const handleScale = useCallback(
+    (e: OnScale) => {
+      const width = e.offsetWidth * e.scale[0]
+      const height = e.offsetHeight * e.scale[1]
+      onScale?.(width, height)
+    },
+    [onScale],
+  )
+
+  const handleScaleEnd = useCallback(
+    (e: OnScaleEnd) => {
+      onScaleEnd?.(e.isDrag)
+    },
+    [onScaleEnd],
+  )
+
+  const handleDragGroupStart = useCallback(
+    (e: OnDragGroupStart) => {
+      e.set([0, 0])
+      onGroupDragStart?.()
+    },
+    [onGroupDragStart],
+  )
+
+  const handleDragGroup = useCallback(
+    (e: OnDragGroup) => {
+      const [tx, ty] = e.translate
+      onGroupDrag?.(tx, ty)
+    },
+    [onGroupDrag],
+  )
+
+  const handleDragGroupEnd = useCallback(
+    (e: OnDragGroupEnd) => {
+      onGroupDragEnd?.(e.isDrag)
+    },
+    [onGroupDragEnd],
+  )
+
+  const handleScaleGroupStart = useCallback(
+    (e: OnScaleGroupStart) => {
+      e.set([1, 1])
+      onGroupScaleStart?.()
+    },
+    [onGroupScaleStart],
+  )
+
+  const handleScaleGroup = useCallback(
+    (e: OnScaleGroup) => {
+      const width = e.offsetWidth * e.scale[0]
+      const height = e.offsetHeight * e.scale[1]
+      onGroupScale?.(width, height)
+    },
+    [onGroupScale],
+  )
+
+  const handleScaleGroupEnd = useCallback(
+    (e: OnScaleGroupEnd) => {
+      onGroupScaleEnd?.(e.isDrag)
+    },
+    [onGroupScaleEnd],
+  )
+
+  if (!enabled || effectiveTargets.length === 0 || !containerEl) {
     return null
   }
 
   const isGroup = effectiveTargets.length > 1
-  const moveableTarget = isGroup ? effectiveTargets : effectiveTargets[0]
-
-  const handleDragStart = (e: OnDragStart) => {
-    e.set([0, 0])
-    onDragStart?.()
-  }
-
-  const handleDrag = (e: OnDrag) => {
-    const [tx, ty] = e.translate
-    onDrag?.(tx, ty)
-  }
-
-  const handleDragEnd = (e: OnDragEnd) => {
-    onDragEnd?.(e.isDrag)
-  }
-
-  const handleResizeStart = (e: OnResizeStart) => {
-    e.setMin([0, 0])
-    onResizeStart?.()
-  }
-
-  const handleResize = (e: OnResize) => {
-    onResize?.(e.width, e.height)
-  }
-
-  const handleResizeEnd = (e: OnResizeEnd) => {
-    onResizeEnd?.(e.isDrag)
-  }
-
-  const handleDragGroupStart = (e: OnDragGroupStart) => {
-    e.set([0, 0])
-    onGroupDragStart?.()
-  }
-
-  const handleDragGroup = (e: OnDragGroup) => {
-    const [tx, ty] = e.translate
-    onGroupDrag?.(tx, ty)
-  }
-
-  const handleDragGroupEnd = (e: OnDragGroupEnd) => {
-    onGroupDragEnd?.(e.isDrag)
-  }
-
-  const handleResizeGroupStart = (e: OnResizeGroupStart) => {
-    e.setMin([0, 0])
-    onGroupResizeStart?.()
-  }
-
-  const handleResizeGroup = (e: OnResizeGroup) => {
-    onGroupResize?.(e.width, e.height)
-  }
-
-  const handleResizeGroupEnd = (e: OnResizeGroupEnd) => {
-    onGroupResizeEnd?.(e.isDrag)
-  }
 
   return (
     <Moveable
-      target={moveableTarget}
+      ref={moveableRef}
+      {...(isGroup ? { targets: effectiveTargets } : { target: effectiveTargets[0] })}
+      container={containerEl}
       draggable
-      resizable
-      renderDirections={['se']}
+      scalable
+      renderDirections={['nw', 'ne', 'sw', 'se', 'n', 's', 'e', 'w']}
+      keepRatio={shiftPressed}
+      throttleScale={0}
       snappable
       elementGuidelines={elementGuidelines}
       snapDirections={{
@@ -212,15 +293,15 @@ export function MoveableLayer({
       onDragStart={handleDragStart}
       onDrag={handleDrag}
       onDragEnd={handleDragEnd}
-      onResizeStart={handleResizeStart}
-      onResize={handleResize}
-      onResizeEnd={handleResizeEnd}
+      onScaleStart={handleScaleStart}
+      onScale={handleScale}
+      onScaleEnd={handleScaleEnd}
       onDragGroupStart={handleDragGroupStart}
       onDragGroup={handleDragGroup}
       onDragGroupEnd={handleDragGroupEnd}
-      onResizeGroupStart={handleResizeGroupStart}
-      onResizeGroup={handleResizeGroup}
-      onResizeGroupEnd={handleResizeGroupEnd}
+      onScaleGroupStart={handleScaleGroupStart}
+      onScaleGroup={handleScaleGroup}
+      onScaleGroupEnd={handleScaleGroupEnd}
     />
   )
 }

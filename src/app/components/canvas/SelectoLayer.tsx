@@ -68,6 +68,7 @@ export function SelectoLayer({
       container={container as unknown as HTMLElement}
       dragContainer={dragContainer}
       selectableTargets={selectableTargets}
+      rootContainer={container as unknown as HTMLElement}
       selectFromInside={false}
       selectByClick={false}
       preventDragFromInside={false}

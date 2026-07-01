@@ -38,11 +38,9 @@ type UseEditorShortcutsOptions = {
   copySelectedElements: () => void
   pasteCopiedElements: () => void
   deleteSelected: () => void
-  selectedElementRef: React.MutableRefObject<SceneElement | null>
   elementClipboardRef: React.MutableRefObject<SceneElement | null>
   elementsClipboardRef: React.MutableRefObject<SceneElement[] | null>
   spatialIndexRef: React.MutableRefObject<SpatialIndex>
-  setGuidesSelectedIds: (ids: string[]) => void
   setGuides: (guides: GuideLine[]) => void
   setSpacingGuides: (guides: MeasurementGuide[]) => void
   setScene: (updater: (currentScene: Scene) => Scene) => void
@@ -62,7 +60,6 @@ export function useEditorShortcuts(options: UseEditorShortcutsOptions) {
     elementClipboardRef,
     elementsClipboardRef,
     spatialIndexRef,
-    setGuidesSelectedIds,
     setGuides,
     setSpacingGuides,
     setScene,
@@ -176,7 +173,6 @@ export function useEditorShortcuts(options: UseEditorShortcutsOptions) {
               spatialIndexRef.current,
             )
 
-            setGuidesSelectedIds(selection.selectedIds)
             setGuides(guides)
             setSpacingGuides(spacingGuides)
           }
@@ -197,89 +193,6 @@ export function useEditorShortcuts(options: UseEditorShortcutsOptions) {
       if ((event.metaKey || event.ctrlKey) && key === 'y') {
         event.preventDefault()
         redo()
-        return
-      }
-
-      if (arrowKeys.includes(event.key)) {
-        if (selection.selectedIds.length === 0) {
-          return
-        }
-
-        event.preventDefault()
-
-        const selectedElements = scene.elements.filter(
-          (el) => selection.selectedIds.includes(el.id) && !el.locked,
-        )
-
-        if (selectedElements.length === 0) {
-          return
-        }
-
-        const movementStep = event.shiftKey ? 10 : 1
-
-        let dx = 0
-        let dy = 0
-
-        switch (event.key) {
-          case 'ArrowUp':
-            dy = -movementStep
-            break
-          case 'ArrowDown':
-            dy = movementStep
-            break
-          case 'ArrowLeft':
-            dx = -movementStep
-            break
-          case 'ArrowRight':
-            dx = movementStep
-            break
-        }
-
-        const otherElements = scene.elements.filter(
-          (el) => !selection.selectedIds.includes(el.id) && !el.locked && el.hidden !== true,
-        )
-        spatialIndexRef.current = buildSpatialIndex(otherElements)
-
-        setScene((currentScene) => {
-          const updatedElements = currentScene.elements.map((element) => {
-            if (!selection.selectedIds.includes(element.id) || element.locked) {
-              return element
-            }
-
-            return {
-              ...element,
-              x: element.x + dx,
-              y: element.y + dy,
-            } as SceneElement
-          })
-
-          const updatedSelectedElements = updatedElements.filter(
-            (el) => selection.selectedIds.includes(el.id) && !el.locked,
-          )
-
-          if (updatedSelectedElements.length > 0) {
-            const movedBounds = computeBoundingBox(updatedSelectedElements)
-            const guides = computeGuidesOptimized(movedBounds, spatialIndexRef.current)
-            const spacingGuides = computeSpacingGuidesOptimized(
-              movedBounds,
-              spatialIndexRef.current,
-            )
-
-            setGuidesSelectedIds(selection.selectedIds)
-            setGuides(guides)
-            setSpacingGuides(spacingGuides)
-          }
-
-          return {
-            ...currentScene,
-            elements: updatedElements,
-          }
-        })
-        markSceneEdited()
-        return
-      }
-
-      if (!isCopyPasteModifier(event) || isEditableTarget(event.target)) {
         return
       }
 
@@ -313,7 +226,6 @@ export function useEditorShortcuts(options: UseEditorShortcutsOptions) {
     elementClipboardRef,
     elementsClipboardRef,
     setGuides,
-    setGuidesSelectedIds,
     setScene,
     setSpacingGuides,
     spatialIndexRef,

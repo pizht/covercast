@@ -4,52 +4,19 @@ export * from './scene'
 // Alignment (smart-guide)
 export {
   type GuideMode,
-  type GuideContext,
   type GuideDirection,
   type GuideType,
   type GuideLine,
   type ExtensionLine,
   type MeasurementGuide,
-  type ResizeLabel,
-  type CanvasSizeOptions,
-  type AxisSnapState,
-  type SnapState,
-  type SnapResult,
-  type AxisResizeSnapState,
-  type ResizeSnapState,
-  type ResizeSnapResult,
-  SNAP_THRESHOLD,
-  SNAP_HYSTERESIS,
   computeGuides,
-  createSnapState,
-  computeSnap,
   computeSpacingGuides,
-  createResizeSnapState,
-  computeResizeSnap,
   computeGuidesOptimized,
-  computeSnapOptimized,
   computeSpacingGuidesOptimized,
-  computeResizeSnapOptimized,
 } from './alignment'
 
 // Transform (group-drag)
-export {
-  type GroupDragState,
-  type ResizeHandleType,
-  type GroupResizeState,
-  type BoundingBox,
-  type ScaleMatrix,
-  createGroupDragState,
-  createGroupResizeState,
-  computeBoundingBox,
-  computeScaleMatrix,
-  applyScaleToElement,
-  applyGroupResize,
-  computeNewBoundsFromHandle,
-  applyGroupDragDelta,
-  clampGroupPosition,
-  formatDimension,
-} from './transform'
+export { type BoundingBox, computeBoundingBox } from './transform'
 
 // Marquee (selection-box + hit-test)
 export {

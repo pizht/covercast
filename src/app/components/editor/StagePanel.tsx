@@ -2,7 +2,7 @@
 
 import type { Ref, WheelEvent as ReactWheelEvent, PointerEvent } from 'react'
 import SceneCanvas from '../SceneCanvas'
-import type { Scene, GuideLine, MeasurementGuide, ResizeLabel, ResizeHandleType } from '@/domain'
+import type { Scene, GuideLine, MeasurementGuide } from '@/domain'
 import { Slider } from '@/shared/components/ui'
 import styles from './editor.module.css'
 
@@ -27,36 +27,32 @@ type StagePanelProps = {
 
   // SceneCanvas props
   scene: Scene
-  selectedIds: string[]
   guides?: GuideLine[]
   spacingGuides?: MeasurementGuide[]
-  resizeLabel?: ResizeLabel | null
   svgRef?: Ref<SVGSVGElement>
   editingTextId?: string | null
-  isGroupDragging?: boolean
   canvasWidth?: number
   canvasHeight?: number
   resolveSrc?: (src: string) => string
   onElementPointerDown?: (elementId: string, event: PointerEvent<SVGGElement>) => void
-  onResizePointerDown?: (elementId: string, event: PointerEvent<SVGRectElement>) => void
-  onGroupDragPointerDown?: (event: PointerEvent<SVGRectElement>) => void
-  onGroupResizePointerDown?: (handle: ResizeHandleType, event: PointerEvent<SVGRectElement>) => void
   onTextElementDoubleClick?: (elementId: string) => void
   moveableTargetIds?: string[]
   moveableSnapTargetIds?: string[]
   moveableEnabled?: boolean
+  moveableRefreshKey?: string
+  dimensionLabel?: { x: number; y: number; width: number; height: number } | null
   onMoveableDragStart?: () => void
   onMoveableDrag?: (translateX: number, translateY: number) => void
   onMoveableDragEnd?: (isDrag: boolean) => void
-  onMoveableResizeStart?: () => void
-  onMoveableResize?: (width: number, height: number) => void
-  onMoveableResizeEnd?: (isDrag: boolean) => void
+  onMoveableScaleStart?: () => void
+  onMoveableScale?: (width: number, height: number) => void
+  onMoveableScaleEnd?: (isDrag: boolean) => void
   onMoveableGroupDragStart?: () => void
   onMoveableGroupDrag?: (translateX: number, translateY: number) => void
   onMoveableGroupDragEnd?: (isDrag: boolean) => void
-  onMoveableGroupResizeStart?: () => void
-  onMoveableGroupResize?: (groupWidth: number, groupHeight: number) => void
-  onMoveableGroupResizeEnd?: (isDrag: boolean) => void
+  onMoveableGroupScaleStart?: () => void
+  onMoveableGroupScale?: (groupWidth: number, groupHeight: number) => void
+  onMoveableGroupScaleEnd?: (isDrag: boolean) => void
   selectoSelectableTargetIds?: string[]
   selectoEnabled?: boolean
   onSelectoDragStart?: (isShiftPressed: boolean) => void
@@ -79,36 +75,32 @@ export function StagePanel({
   handleStageWheel,
   stageViewportRef,
   scene,
-  selectedIds,
   guides,
   spacingGuides,
-  resizeLabel,
   svgRef,
   editingTextId,
-  isGroupDragging,
   canvasWidth,
   canvasHeight,
   resolveSrc,
   onElementPointerDown,
-  onResizePointerDown,
-  onGroupDragPointerDown,
-  onGroupResizePointerDown,
   onTextElementDoubleClick,
   moveableTargetIds,
   moveableSnapTargetIds,
   moveableEnabled,
+  moveableRefreshKey,
+  dimensionLabel,
   onMoveableDragStart,
   onMoveableDrag,
   onMoveableDragEnd,
-  onMoveableResizeStart,
-  onMoveableResize,
-  onMoveableResizeEnd,
+  onMoveableScaleStart,
+  onMoveableScale,
+  onMoveableScaleEnd,
   onMoveableGroupDragStart,
   onMoveableGroupDrag,
   onMoveableGroupDragEnd,
-  onMoveableGroupResizeStart,
-  onMoveableGroupResize,
-  onMoveableGroupResizeEnd,
+  onMoveableGroupScaleStart,
+  onMoveableGroupScale,
+  onMoveableGroupScaleEnd,
   selectoSelectableTargetIds,
   selectoEnabled,
   onSelectoDragStart,
@@ -181,36 +173,32 @@ export function StagePanel({
               style={{ aspectRatio: `${canvasWidth} / ${canvasHeight}` }}
               idPrefix="editor"
               interactive
-              selectedIds={selectedIds}
               guides={guides}
               spacingGuides={spacingGuides}
-              resizeLabel={resizeLabel}
               svgRef={svgRef}
               editingTextId={editingTextId}
-              isGroupDragging={isGroupDragging}
               canvasWidth={canvasWidth}
               canvasHeight={canvasHeight}
               resolveSrc={resolveSrc}
               onElementPointerDown={onElementPointerDown}
-              onResizePointerDown={onResizePointerDown}
-              onGroupDragPointerDown={onGroupDragPointerDown}
-              onGroupResizePointerDown={onGroupResizePointerDown}
               onTextElementDoubleClick={onTextElementDoubleClick}
               moveableTargetIds={moveableTargetIds}
               moveableSnapTargetIds={moveableSnapTargetIds}
               moveableEnabled={moveableEnabled}
+              moveableRefreshKey={moveableRefreshKey}
+              dimensionLabel={dimensionLabel}
               onMoveableDragStart={onMoveableDragStart}
               onMoveableDrag={onMoveableDrag}
               onMoveableDragEnd={onMoveableDragEnd}
-              onMoveableResizeStart={onMoveableResizeStart}
-              onMoveableResize={onMoveableResize}
-              onMoveableResizeEnd={onMoveableResizeEnd}
+              onMoveableScaleStart={onMoveableScaleStart}
+              onMoveableScale={onMoveableScale}
+              onMoveableScaleEnd={onMoveableScaleEnd}
               onMoveableGroupDragStart={onMoveableGroupDragStart}
               onMoveableGroupDrag={onMoveableGroupDrag}
               onMoveableGroupDragEnd={onMoveableGroupDragEnd}
-              onMoveableGroupResizeStart={onMoveableGroupResizeStart}
-              onMoveableGroupResize={onMoveableGroupResize}
-              onMoveableGroupResizeEnd={onMoveableGroupResizeEnd}
+              onMoveableGroupScaleStart={onMoveableGroupScaleStart}
+              onMoveableGroupScale={onMoveableGroupScale}
+              onMoveableGroupScaleEnd={onMoveableGroupScaleEnd}
               selectoSelectableTargetIds={selectoSelectableTargetIds}
               selectoEnabled={selectoEnabled}
               onSelectoDragStart={onSelectoDragStart}

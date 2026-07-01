@@ -1,19 +1,14 @@
-import { useEffect, useState, type PointerEvent, type Ref } from 'react'
+import { useRef, type PointerEvent, type Ref } from 'react'
 import {
   DEFAULT_CANVAS_WIDTH,
   DEFAULT_CANVAS_HEIGHT,
   type Scene,
   type GuideLine,
   type MeasurementGuide,
-  type ResizeLabel,
-  type ResizeHandleType,
 } from '@/domain'
 import { SceneDefs, backgroundMaskId, hasBackgroundCutouts } from './canvas/SceneDefs'
 import { ElementView } from './canvas/elements/ElementView'
-import { SelectionFrame } from './canvas/SelectionFrame'
-import { GroupSelectionFrame } from './canvas/GroupSelectionFrame'
 import { SmartGuideOverlay } from './canvas/SmartGuideOverlay'
-import { ResizeLabelOverlay } from './canvas/ResizeLabelOverlay'
 import { SpacingGuideOverlay } from './canvas/SpacingGuideOverlay'
 import { MoveableLayer } from './canvas/MoveableLayer'
 import { SelectoLayer } from './canvas/SelectoLayer'
@@ -24,36 +19,32 @@ type SceneCanvasProps = {
   style?: React.CSSProperties
   idPrefix?: string
   interactive?: boolean
-  selectedIds?: string[]
   guides?: GuideLine[]
   spacingGuides?: MeasurementGuide[]
-  resizeLabel?: ResizeLabel | null
   svgRef?: Ref<SVGSVGElement>
   editingTextId?: string | null
-  isGroupDragging?: boolean
   canvasWidth?: number
   canvasHeight?: number
   resolveSrc?: (src: string) => string
   onElementPointerDown?: (elementId: string, event: PointerEvent<SVGGElement>) => void
-  onResizePointerDown?: (elementId: string, event: PointerEvent<SVGRectElement>) => void
-  onGroupDragPointerDown?: (event: PointerEvent<SVGRectElement>) => void
-  onGroupResizePointerDown?: (handle: ResizeHandleType, event: PointerEvent<SVGRectElement>) => void
   onTextElementDoubleClick?: (elementId: string) => void
   moveableTargetIds?: string[]
   moveableSnapTargetIds?: string[]
   moveableEnabled?: boolean
+  moveableRefreshKey?: string
+  dimensionLabel?: { x: number; y: number; width: number; height: number } | null
   onMoveableDragStart?: () => void
   onMoveableDrag?: (translateX: number, translateY: number) => void
   onMoveableDragEnd?: (isDrag: boolean) => void
-  onMoveableResizeStart?: () => void
-  onMoveableResize?: (width: number, height: number) => void
-  onMoveableResizeEnd?: (isDrag: boolean) => void
+  onMoveableScaleStart?: () => void
+  onMoveableScale?: (width: number, height: number) => void
+  onMoveableScaleEnd?: (isDrag: boolean) => void
   onMoveableGroupDragStart?: () => void
   onMoveableGroupDrag?: (translateX: number, translateY: number) => void
   onMoveableGroupDragEnd?: (isDrag: boolean) => void
-  onMoveableGroupResizeStart?: () => void
-  onMoveableGroupResize?: (groupWidth: number, groupHeight: number) => void
-  onMoveableGroupResizeEnd?: (isDrag: boolean) => void
+  onMoveableGroupScaleStart?: () => void
+  onMoveableGroupScale?: (groupWidth: number, groupHeight: number) => void
+  onMoveableGroupScaleEnd?: (isDrag: boolean) => void
   selectoSelectableTargetIds?: string[]
   selectoEnabled?: boolean
   onSelectoDragStart?: (isShiftPressed: boolean) => void
@@ -66,72 +57,50 @@ export default function SceneCanvas({
   style,
   idPrefix = 'scene',
   interactive = false,
-  selectedIds = [],
   guides,
   spacingGuides,
-  resizeLabel,
   svgRef,
   editingTextId,
-  isGroupDragging = false,
   canvasWidth = DEFAULT_CANVAS_WIDTH,
   canvasHeight = DEFAULT_CANVAS_HEIGHT,
   resolveSrc,
   onElementPointerDown,
-  onResizePointerDown,
-  onGroupDragPointerDown,
-  onGroupResizePointerDown,
   onTextElementDoubleClick,
   moveableTargetIds = [],
   moveableSnapTargetIds = [],
   moveableEnabled = false,
+  moveableRefreshKey = '',
+  dimensionLabel = null,
   onMoveableDragStart,
   onMoveableDrag,
   onMoveableDragEnd,
-  onMoveableResizeStart,
-  onMoveableResize,
-  onMoveableResizeEnd,
+  onMoveableScaleStart,
+  onMoveableScale,
+  onMoveableScaleEnd,
   onMoveableGroupDragStart,
   onMoveableGroupDrag,
   onMoveableGroupDragEnd,
-  onMoveableGroupResizeStart,
-  onMoveableGroupResize,
-  onMoveableGroupResizeEnd,
+  onMoveableGroupScaleStart,
+  onMoveableGroupScale,
+  onMoveableGroupScaleEnd,
   selectoSelectableTargetIds = [],
   selectoEnabled = false,
   onSelectoDragStart,
   onSelectoSelectEnd,
 }: SceneCanvasProps) {
-  const [shiftKeyPressed, setShiftKeyPressed] = useState(false)
-
-  useEffect(() => {
-    if (!interactive) return
-
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Shift') {
-        setShiftKeyPressed(true)
-      }
-    }
-
-    const handleKeyUp = (e: KeyboardEvent) => {
-      if (e.key === 'Shift') {
-        setShiftKeyPressed(false)
-      }
-    }
-
-    window.addEventListener('keydown', handleKeyDown)
-    window.addEventListener('keyup', handleKeyUp)
-
-    return () => {
-      window.removeEventListener('keydown', handleKeyDown)
-      window.removeEventListener('keyup', handleKeyUp)
-    }
-  }, [interactive])
-
   const visibleElements = scene.elements.filter((element) => element.hidden !== true)
-  const selectedElements = visibleElements.filter((element) => selectedIds.includes(element.id))
+  const containerRef = useRef<HTMLDivElement>(null)
 
   return (
-    <>
+    <div
+      ref={containerRef}
+      style={{
+        position: 'relative',
+        width: '100%',
+        height: '100%',
+        transform: 'translateZ(0)',
+      }}
+    >
       <svg
         ref={svgRef}
         className={className}
@@ -187,57 +156,57 @@ export default function SceneCanvas({
           />
         ))}
 
-        {interactive && selectedElements.length > 0 ? (
-          <>
-            {moveableTargetIds.length > 0
-              ? null
-              : selectedElements.map((element) => (
-                  <SelectionFrame
-                    key={element.id}
-                    element={element}
-                    onResizePointerDown={
-                      selectedElements.length === 1 ? onResizePointerDown : undefined
-                    }
-                  />
-                ))}
-            {selectedElements.length > 1 && !isGroupDragging && moveableTargetIds.length <= 1 ? (
-              <GroupSelectionFrame
-                elements={selectedElements}
-                shiftKeyPressed={shiftKeyPressed}
-                onDragPointerDown={onGroupDragPointerDown}
-                onResizePointerDown={onGroupResizePointerDown}
-              />
-            ) : null}
-          </>
-        ) : null}
-
         {guides && guides.length > 0 ? <SmartGuideOverlay guides={guides} /> : null}
-
-        {resizeLabel ? <ResizeLabelOverlay resizeLabel={resizeLabel} /> : null}
 
         {spacingGuides && spacingGuides.length > 0 ? (
           <SpacingGuideOverlay spacingGuides={spacingGuides} />
         ) : null}
+
+        {dimensionLabel ? (
+          <g pointerEvents="none">
+            <rect
+              x={dimensionLabel.x + dimensionLabel.width / 2 - 40}
+              y={dimensionLabel.y + dimensionLabel.height + 6}
+              width={80}
+              height={20}
+              rx={3}
+              fill="#243247"
+              opacity={0.85}
+            />
+            <text
+              x={dimensionLabel.x + dimensionLabel.width / 2}
+              y={dimensionLabel.y + dimensionLabel.height + 20}
+              textAnchor="middle"
+              fill="#ffffff"
+              fontSize={12}
+              fontWeight={700}
+            >
+              {Math.round(dimensionLabel.width)} × {Math.round(dimensionLabel.height)}
+            </text>
+          </g>
+        ) : null}
       </svg>
       <MoveableLayer
         svgRef={svgRef}
+        containerRef={containerRef}
         targetElementIds={moveableTargetIds}
         snapTargetIds={moveableSnapTargetIds}
         canvasWidth={canvasWidth}
         canvasHeight={canvasHeight}
+        refreshKey={moveableRefreshKey}
         enabled={moveableEnabled && interactive}
         onDragStart={onMoveableDragStart}
         onDrag={onMoveableDrag}
         onDragEnd={onMoveableDragEnd}
-        onResizeStart={onMoveableResizeStart}
-        onResize={onMoveableResize}
-        onResizeEnd={onMoveableResizeEnd}
+        onScaleStart={onMoveableScaleStart}
+        onScale={onMoveableScale}
+        onScaleEnd={onMoveableScaleEnd}
         onGroupDragStart={onMoveableGroupDragStart}
         onGroupDrag={onMoveableGroupDrag}
         onGroupDragEnd={onMoveableGroupDragEnd}
-        onGroupResizeStart={onMoveableGroupResizeStart}
-        onGroupResize={onMoveableGroupResize}
-        onGroupResizeEnd={onMoveableGroupResizeEnd}
+        onGroupScaleStart={onMoveableGroupScaleStart}
+        onGroupScale={onMoveableGroupScale}
+        onGroupScaleEnd={onMoveableGroupScaleEnd}
       />
       <SelectoLayer
         svgRef={svgRef}
@@ -246,7 +215,7 @@ export default function SceneCanvas({
         onDragStart={onSelectoDragStart}
         onSelectEnd={onSelectoSelectEnd}
       />
-    </>
+    </div>
   )
 }
 

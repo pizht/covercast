@@ -5,10 +5,14 @@ import {
   cloneScene,
   createDefaultScene,
   computeBoundingBox,
+  computeGuidesOptimized,
+  computeSpacingGuidesOptimized,
+  buildSpatialIndex,
   isTextElement,
   type Scene,
   type SceneElement,
   type BoundingBox,
+  type SpatialIndex,
   createSelectionState,
   selectSingle,
   clearSelection,
@@ -31,7 +35,6 @@ import { useExportScene, type ExportFormat, EXPORT_FORMAT_OPTIONS } from '../hoo
 import { useSceneActions } from '../hooks/useSceneActions'
 import { useAssetManager } from '../hooks/useAssetManager'
 import { useSceneLoader } from '../hooks/useSceneLoader'
-import { useVisibleGuides } from '../hooks/useVisibleGuides'
 import { useLocalFonts } from '../hooks/useLocalFonts'
 import { useLocalAssets } from '../hooks/useLocalAssets'
 import { useCreateBlankCover } from '../hooks/useCreateBlankCover'
@@ -75,7 +78,6 @@ export default function SceneEditor() {
   const [status, setStatus] = useState('正在读取本地场景...')
   const [appOrigin, setAppOrigin] = useState('')
   const [exportFormat, setExportFormat] = useState<ExportFormat>('png')
-  const [guidesSelectedIds, setGuidesSelectedIds] = useState<string[]>([])
   const svgRef = useRef<SVGSVGElement>(null)
   const sceneElementsRef = useRef<SceneElement[]>(scene.elements)
   const selectedElementRef = useRef<SceneElement | null>(null)
@@ -258,30 +260,17 @@ export default function SceneEditor() {
   )
 
   const {
-    drag,
     guides,
     spacingGuides,
-    resizeLabel,
     spatialIndexRef,
     setGuides,
     setSpacingGuides,
     handleElementPointerDown,
-    handleResizePointerDown,
-    handleGroupResizePointerDown,
-    handleGroupDragPointerDown,
   } = useDragManager({
-    scene,
     selection,
     editingTextId,
-    svgRef,
-    saveHistory,
-    markSceneEdited,
-    setScene,
     setSelection,
     setEditingTextId,
-    canvasWidth: canvasSize.width,
-    canvasHeight: canvasSize.height,
-    moveableSingleDragEnabled: true,
   })
 
   const selectedElement = useMemo(() => {
@@ -312,8 +301,31 @@ export default function SceneEditor() {
       .map((element) => element.id)
   }, [selection.selectedIds, scene.elements])
 
+  const moveableRefreshKey = useMemo(() => {
+    return scene.elements
+      .filter((element) => selection.selectedIds.includes(element.id))
+      .map(
+        (element) => `${element.id}:${element.x},${element.y},${element.width},${element.height}`,
+      )
+      .join('|')
+  }, [scene.elements, selection.selectedIds])
+
   const moveableDragStartRef = useRef<SceneElement | null>(null)
-  const moveableResizeStartRef = useRef<SceneElement | null>(null)
+  const moveableScaleStartRef = useRef<SceneElement | null>(null)
+  const dragSpatialIndexRef = useRef<SpatialIndex | null>(null)
+  const [dimensionLabel, setDimensionLabel] = useState<{
+    x: number
+    y: number
+    width: number
+    height: number
+  } | null>(null)
+
+  const buildDragSpatialIndex = useCallback(() => {
+    const otherElements = scene.elements.filter(
+      (el) => !selection.selectedIds.includes(el.id) && !el.locked && el.hidden !== true,
+    )
+    dragSpatialIndexRef.current = buildSpatialIndex(otherElements)
+  }, [scene.elements, selection.selectedIds])
 
   const handleMoveableDragStart = useCallback(() => {
     const id = moveableTargetIds[0]
@@ -325,8 +337,9 @@ export default function SceneEditor() {
       return
     }
     moveableDragStartRef.current = { ...element }
+    buildDragSpatialIndex()
     saveHistory(`移动元素「${element.name}」`, scene)
-  }, [moveableTargetIds, scene, saveHistory])
+  }, [moveableTargetIds, scene, saveHistory, buildDragSpatialIndex])
 
   const handleMoveableDrag = useCallback(
     (translateX: number, translateY: number) => {
@@ -342,16 +355,23 @@ export default function SceneEditor() {
           element.id === start.id ? ({ ...element, x: nextX, y: nextY } as SceneElement) : element,
         ),
       }))
+      if (dragSpatialIndexRef.current) {
+        const movedBounds = { x: nextX, y: nextY, width: start.width, height: start.height }
+        setGuides(computeGuidesOptimized(movedBounds, dragSpatialIndexRef.current))
+        setSpacingGuides(computeSpacingGuidesOptimized(movedBounds, dragSpatialIndexRef.current))
+      }
       markSceneEdited()
     },
-    [canvasSize.width, canvasSize.height, setScene, markSceneEdited],
+    [canvasSize.width, canvasSize.height, setScene, markSceneEdited, setGuides, setSpacingGuides],
   )
 
   const handleMoveableDragEnd = useCallback(() => {
     moveableDragStartRef.current = null
-  }, [])
+    setGuides([])
+    setSpacingGuides([])
+  }, [setGuides, setSpacingGuides])
 
-  const handleMoveableResizeStart = useCallback(() => {
+  const handleMoveableScaleStart = useCallback(() => {
     const id = moveableTargetIds[0]
     if (!id) {
       return
@@ -360,13 +380,14 @@ export default function SceneEditor() {
     if (!element) {
       return
     }
-    moveableResizeStartRef.current = { ...element }
+    moveableScaleStartRef.current = { ...element }
+    buildDragSpatialIndex()
     saveHistory(`调整元素大小「${element.name}」`, scene)
-  }, [moveableTargetIds, scene, saveHistory])
+  }, [moveableTargetIds, scene, saveHistory, buildDragSpatialIndex])
 
-  const handleMoveableResize = useCallback(
+  const handleMoveableScale = useCallback(
     (width: number, height: number) => {
-      const start = moveableResizeStartRef.current
+      const start = moveableScaleStartRef.current
       if (!start) {
         return
       }
@@ -384,20 +405,29 @@ export default function SceneEditor() {
             : element,
         ),
       }))
+      setDimensionLabel({ x: start.x, y: start.y, width: nextW, height: nextH })
+      if (dragSpatialIndexRef.current) {
+        const movedBounds = { x: start.x, y: start.y, width: nextW, height: nextH }
+        setGuides(computeGuidesOptimized(movedBounds, dragSpatialIndexRef.current))
+        setSpacingGuides(computeSpacingGuidesOptimized(movedBounds, dragSpatialIndexRef.current))
+      }
       markSceneEdited()
     },
-    [canvasSize.width, canvasSize.height, setScene, markSceneEdited],
+    [canvasSize.width, canvasSize.height, setScene, markSceneEdited, setGuides, setSpacingGuides],
   )
 
-  const handleMoveableResizeEnd = useCallback(() => {
-    moveableResizeStartRef.current = null
-  }, [])
+  const handleMoveableScaleEnd = useCallback(() => {
+    moveableScaleStartRef.current = null
+    setGuides([])
+    setSpacingGuides([])
+    setDimensionLabel(null)
+  }, [setGuides, setSpacingGuides])
 
   const moveableGroupDragStartRef = useRef<{
     bounds: BoundingBox
     elements: SceneElement[]
   } | null>(null)
-  const moveableGroupResizeStartRef = useRef<{
+  const moveableGroupScaleStartRef = useRef<{
     bounds: BoundingBox
     elements: SceneElement[]
   } | null>(null)
@@ -411,8 +441,9 @@ export default function SceneEditor() {
       bounds: computeBoundingBox(targets),
       elements: targets.map((el) => ({ ...el })),
     }
+    buildDragSpatialIndex()
     saveHistory(`移动 ${targets.length} 个元素`, scene)
-  }, [moveableTargetIds, scene, saveHistory])
+  }, [moveableTargetIds, scene, saveHistory, buildDragSpatialIndex])
 
   const handleMoveableGroupDrag = useCallback(
     (translateX: number, translateY: number) => {
@@ -442,30 +473,43 @@ export default function SceneEditor() {
           return { ...element, x: startEl.x + deltaX, y: startEl.y + deltaY } as SceneElement
         }),
       }))
+      if (dragSpatialIndexRef.current) {
+        const movedBounds = {
+          x: nextX,
+          y: nextY,
+          width: start.bounds.width,
+          height: start.bounds.height,
+        }
+        setGuides(computeGuidesOptimized(movedBounds, dragSpatialIndexRef.current))
+        setSpacingGuides(computeSpacingGuidesOptimized(movedBounds, dragSpatialIndexRef.current))
+      }
       markSceneEdited()
     },
-    [canvasSize.width, canvasSize.height, setScene, markSceneEdited],
+    [canvasSize.width, canvasSize.height, setScene, markSceneEdited, setGuides, setSpacingGuides],
   )
 
   const handleMoveableGroupDragEnd = useCallback(() => {
     moveableGroupDragStartRef.current = null
-  }, [])
+    setGuides([])
+    setSpacingGuides([])
+  }, [setGuides, setSpacingGuides])
 
-  const handleMoveableGroupResizeStart = useCallback(() => {
+  const handleMoveableGroupScaleStart = useCallback(() => {
     const targets = scene.elements.filter((el) => moveableTargetIds.includes(el.id))
     if (targets.length === 0) {
       return
     }
-    moveableGroupResizeStartRef.current = {
+    moveableGroupScaleStartRef.current = {
       bounds: computeBoundingBox(targets),
       elements: targets.map((el) => ({ ...el })),
     }
+    buildDragSpatialIndex()
     saveHistory(`缩放 ${targets.length} 个元素`, scene)
-  }, [moveableTargetIds, scene, saveHistory])
+  }, [moveableTargetIds, scene, saveHistory, buildDragSpatialIndex])
 
-  const handleMoveableGroupResize = useCallback(
+  const handleMoveableGroupScale = useCallback(
     (groupWidth: number, groupHeight: number) => {
-      const start = moveableGroupResizeStartRef.current
+      const start = moveableGroupScaleStartRef.current
       if (!start || start.bounds.width <= 0 || start.bounds.height <= 0) {
         return
       }
@@ -491,21 +535,38 @@ export default function SceneEditor() {
           } as SceneElement
         }),
       }))
+      setDimensionLabel({
+        x: start.bounds.x,
+        y: start.bounds.y,
+        width: clampedW,
+        height: clampedH,
+      })
+      if (dragSpatialIndexRef.current) {
+        const movedBounds = {
+          x: start.bounds.x,
+          y: start.bounds.y,
+          width: clampedW,
+          height: clampedH,
+        }
+        setGuides(computeGuidesOptimized(movedBounds, dragSpatialIndexRef.current))
+        setSpacingGuides(computeSpacingGuidesOptimized(movedBounds, dragSpatialIndexRef.current))
+      }
       markSceneEdited()
     },
-    [canvasSize.width, canvasSize.height, setScene, markSceneEdited],
+    [canvasSize.width, canvasSize.height, setScene, markSceneEdited, setGuides, setSpacingGuides],
   )
 
-  const handleMoveableGroupResizeEnd = useCallback(() => {
-    moveableGroupResizeStartRef.current = null
-  }, [])
+  const handleMoveableGroupScaleEnd = useCallback(() => {
+    moveableGroupScaleStartRef.current = null
+    setGuides([])
+    setSpacingGuides([])
+    setDimensionLabel(null)
+  }, [setGuides, setSpacingGuides])
 
-  const { visibleGuides, visibleSpacingGuides } = useVisibleGuides(
-    guides,
-    spacingGuides,
-    selection.selectedIds,
-    guidesSelectedIds,
-  )
+  useEffect(() => {
+    setGuides([])
+    setSpacingGuides([])
+  }, [selection.selectedIds, setGuides, setSpacingGuides])
 
   useEffect(() => {
     sceneElementsRef.current = scene.elements
@@ -585,11 +646,9 @@ export default function SceneEditor() {
     copySelectedElements,
     pasteCopiedElements,
     deleteSelected,
-    selectedElementRef,
     elementClipboardRef,
     elementsClipboardRef,
     spatialIndexRef,
-    setGuidesSelectedIds,
     setGuides,
     setSpacingGuides,
     setScene,
@@ -728,36 +787,32 @@ export default function SceneEditor() {
             handleStageWheel={handleStageWheel}
             stageViewportRef={stageViewportRef}
             scene={scene}
-            selectedIds={selection.selectedIds}
-            guides={visibleGuides}
-            spacingGuides={visibleSpacingGuides}
-            resizeLabel={resizeLabel}
+            guides={guides}
+            spacingGuides={spacingGuides}
             svgRef={svgRef}
             editingTextId={editingTextId}
-            isGroupDragging={drag?.mode === 'group-move'}
             canvasWidth={canvasSize.width}
             canvasHeight={canvasSize.height}
             resolveSrc={resolveSrc}
             onElementPointerDown={handleElementPointerDown}
-            onResizePointerDown={handleResizePointerDown}
-            onGroupDragPointerDown={handleGroupDragPointerDown}
-            onGroupResizePointerDown={handleGroupResizePointerDown}
             onTextElementDoubleClick={handleTextElementDoubleClick}
             moveableTargetIds={moveableTargetIds}
             moveableSnapTargetIds={moveableSnapTargetIds}
             moveableEnabled
+            moveableRefreshKey={moveableRefreshKey}
+            dimensionLabel={dimensionLabel}
             onMoveableDragStart={handleMoveableDragStart}
             onMoveableDrag={handleMoveableDrag}
             onMoveableDragEnd={handleMoveableDragEnd}
-            onMoveableResizeStart={handleMoveableResizeStart}
-            onMoveableResize={handleMoveableResize}
-            onMoveableResizeEnd={handleMoveableResizeEnd}
+            onMoveableScaleStart={handleMoveableScaleStart}
+            onMoveableScale={handleMoveableScale}
+            onMoveableScaleEnd={handleMoveableScaleEnd}
             onMoveableGroupDragStart={handleMoveableGroupDragStart}
             onMoveableGroupDrag={handleMoveableGroupDrag}
             onMoveableGroupDragEnd={handleMoveableGroupDragEnd}
-            onMoveableGroupResizeStart={handleMoveableGroupResizeStart}
-            onMoveableGroupResize={handleMoveableGroupResize}
-            onMoveableGroupResizeEnd={handleMoveableGroupResizeEnd}
+            onMoveableGroupScaleStart={handleMoveableGroupScaleStart}
+            onMoveableGroupScale={handleMoveableGroupScale}
+            onMoveableGroupScaleEnd={handleMoveableGroupScaleEnd}
             selectoSelectableTargetIds={selectoSelectableTargetIds}
             selectoEnabled
             onSelectoDragStart={handleSelectoDragStart}
