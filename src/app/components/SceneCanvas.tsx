@@ -3,27 +3,20 @@ import {
   DEFAULT_CANVAS_WIDTH,
   DEFAULT_CANVAS_HEIGHT,
   type Scene,
-  type SceneElement,
   type GuideLine,
   type MeasurementGuide,
   type ResizeLabel,
-  getMarqueeRect,
-  hasMarqueeSize,
-  hitTestElements,
-  isMarqueeActive,
-  type HitTestStrategy,
-  type MarqueeState,
   type ResizeHandleType,
 } from '@/domain'
 import { SceneDefs, backgroundMaskId, hasBackgroundCutouts } from './canvas/SceneDefs'
 import { ElementView } from './canvas/elements/ElementView'
 import { SelectionFrame } from './canvas/SelectionFrame'
 import { GroupSelectionFrame } from './canvas/GroupSelectionFrame'
-import { MarqueeOverlay } from './canvas/MarqueeOverlay'
 import { SmartGuideOverlay } from './canvas/SmartGuideOverlay'
 import { ResizeLabelOverlay } from './canvas/ResizeLabelOverlay'
 import { SpacingGuideOverlay } from './canvas/SpacingGuideOverlay'
 import { MoveableLayer } from './canvas/MoveableLayer'
+import { SelectoLayer } from './canvas/SelectoLayer'
 
 type SceneCanvasProps = {
   scene: Scene
@@ -36,25 +29,35 @@ type SceneCanvasProps = {
   spacingGuides?: MeasurementGuide[]
   resizeLabel?: ResizeLabel | null
   svgRef?: Ref<SVGSVGElement>
-  marquee?: MarqueeState
-  hitTestStrategy?: HitTestStrategy
   editingTextId?: string | null
   isGroupDragging?: boolean
   canvasWidth?: number
   canvasHeight?: number
   resolveSrc?: (src: string) => string
-  onCanvasPointerDown?: (event: PointerEvent<SVGSVGElement>) => void
   onElementPointerDown?: (elementId: string, event: PointerEvent<SVGGElement>) => void
   onResizePointerDown?: (elementId: string, event: PointerEvent<SVGRectElement>) => void
   onGroupDragPointerDown?: (event: PointerEvent<SVGRectElement>) => void
   onGroupResizePointerDown?: (handle: ResizeHandleType, event: PointerEvent<SVGRectElement>) => void
   onTextElementDoubleClick?: (elementId: string) => void
-  moveableTargetId?: string | null
+  moveableTargetIds?: string[]
+  moveableSnapTargetIds?: string[]
   moveableEnabled?: boolean
-  isMoveableDragging?: boolean
   onMoveableDragStart?: () => void
   onMoveableDrag?: (translateX: number, translateY: number) => void
   onMoveableDragEnd?: (isDrag: boolean) => void
+  onMoveableResizeStart?: () => void
+  onMoveableResize?: (width: number, height: number) => void
+  onMoveableResizeEnd?: (isDrag: boolean) => void
+  onMoveableGroupDragStart?: () => void
+  onMoveableGroupDrag?: (translateX: number, translateY: number) => void
+  onMoveableGroupDragEnd?: (isDrag: boolean) => void
+  onMoveableGroupResizeStart?: () => void
+  onMoveableGroupResize?: (groupWidth: number, groupHeight: number) => void
+  onMoveableGroupResizeEnd?: (isDrag: boolean) => void
+  selectoSelectableTargetIds?: string[]
+  selectoEnabled?: boolean
+  onSelectoDragStart?: (isShiftPressed: boolean) => void
+  onSelectoSelectEnd?: (selectedIds: string[], isShiftPressed: boolean, isClick: boolean) => void
 }
 
 export default function SceneCanvas({
@@ -68,25 +71,35 @@ export default function SceneCanvas({
   spacingGuides,
   resizeLabel,
   svgRef,
-  marquee,
-  hitTestStrategy = 'intersection',
   editingTextId,
   isGroupDragging = false,
   canvasWidth = DEFAULT_CANVAS_WIDTH,
   canvasHeight = DEFAULT_CANVAS_HEIGHT,
   resolveSrc,
-  onCanvasPointerDown,
   onElementPointerDown,
   onResizePointerDown,
   onGroupDragPointerDown,
   onGroupResizePointerDown,
   onTextElementDoubleClick,
-  moveableTargetId = null,
+  moveableTargetIds = [],
+  moveableSnapTargetIds = [],
   moveableEnabled = false,
-  isMoveableDragging = false,
   onMoveableDragStart,
   onMoveableDrag,
   onMoveableDragEnd,
+  onMoveableResizeStart,
+  onMoveableResize,
+  onMoveableResizeEnd,
+  onMoveableGroupDragStart,
+  onMoveableGroupDrag,
+  onMoveableGroupDragEnd,
+  onMoveableGroupResizeStart,
+  onMoveableGroupResize,
+  onMoveableGroupResizeEnd,
+  selectoSelectableTargetIds = [],
+  selectoEnabled = false,
+  onSelectoDragStart,
+  onSelectoSelectEnd,
 }: SceneCanvasProps) {
   const [shiftKeyPressed, setShiftKeyPressed] = useState(false)
 
@@ -117,13 +130,6 @@ export default function SceneCanvas({
   const visibleElements = scene.elements.filter((element) => element.hidden !== true)
   const selectedElements = visibleElements.filter((element) => selectedIds.includes(element.id))
 
-  let marqueePreviewElements: SceneElement[] = []
-  if (marquee && isMarqueeActive(marquee) && hasMarqueeSize(marquee, 5)) {
-    const rect = getMarqueeRect(marquee)
-    const hitIds = hitTestElements(rect, visibleElements, hitTestStrategy)
-    marqueePreviewElements = visibleElements.filter((element) => hitIds.includes(element.id))
-  }
-
   return (
     <>
       <svg
@@ -133,7 +139,6 @@ export default function SceneCanvas({
         role="img"
         aria-label="Covercast OBS live background"
         preserveAspectRatio="xMidYMid meet"
-        onPointerDown={onCanvasPointerDown}
         style={{
           ...style,
           touchAction: interactive ? 'none' : undefined,
@@ -184,7 +189,7 @@ export default function SceneCanvas({
 
         {interactive && selectedElements.length > 0 ? (
           <>
-            {isMoveableDragging
+            {moveableTargetIds.length > 0
               ? null
               : selectedElements.map((element) => (
                   <SelectionFrame
@@ -195,7 +200,7 @@ export default function SceneCanvas({
                     }
                   />
                 ))}
-            {selectedElements.length > 1 && !isGroupDragging ? (
+            {selectedElements.length > 1 && !isGroupDragging && moveableTargetIds.length <= 1 ? (
               <GroupSelectionFrame
                 elements={selectedElements}
                 shiftKeyPressed={shiftKeyPressed}
@@ -204,17 +209,6 @@ export default function SceneCanvas({
               />
             ) : null}
           </>
-        ) : null}
-
-        {interactive && marquee && isMarqueeActive(marquee) ? (
-          <MarqueeOverlay marquee={marquee} />
-        ) : null}
-
-        {interactive && marqueePreviewElements.length > 0 ? (
-          <GroupSelectionFrame
-            elements={marqueePreviewElements}
-            shiftKeyPressed={shiftKeyPressed}
-          />
         ) : null}
 
         {guides && guides.length > 0 ? <SmartGuideOverlay guides={guides} /> : null}
@@ -227,13 +221,30 @@ export default function SceneCanvas({
       </svg>
       <MoveableLayer
         svgRef={svgRef}
-        targetElementId={moveableTargetId}
+        targetElementIds={moveableTargetIds}
+        snapTargetIds={moveableSnapTargetIds}
         canvasWidth={canvasWidth}
         canvasHeight={canvasHeight}
         enabled={moveableEnabled && interactive}
         onDragStart={onMoveableDragStart}
         onDrag={onMoveableDrag}
         onDragEnd={onMoveableDragEnd}
+        onResizeStart={onMoveableResizeStart}
+        onResize={onMoveableResize}
+        onResizeEnd={onMoveableResizeEnd}
+        onGroupDragStart={onMoveableGroupDragStart}
+        onGroupDrag={onMoveableGroupDrag}
+        onGroupDragEnd={onMoveableGroupDragEnd}
+        onGroupResizeStart={onMoveableGroupResizeStart}
+        onGroupResize={onMoveableGroupResize}
+        onGroupResizeEnd={onMoveableGroupResizeEnd}
+      />
+      <SelectoLayer
+        svgRef={svgRef}
+        selectableTargetIds={selectoSelectableTargetIds}
+        enabled={selectoEnabled && interactive}
+        onDragStart={onSelectoDragStart}
+        onSelectEnd={onSelectoSelectEnd}
       />
     </>
   )

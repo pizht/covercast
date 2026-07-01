@@ -4,12 +4,16 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   cloneScene,
   createDefaultScene,
+  computeBoundingBox,
+  isTextElement,
   type Scene,
   type SceneElement,
+  type BoundingBox,
   createSelectionState,
   selectSingle,
+  clearSelection,
+  selectMultiple,
   type SelectionState,
-  type HitTestStrategy,
 } from '@/domain'
 import { clamp } from '@/shared/lib'
 import editorStyles from './editor/editor.module.css'
@@ -23,7 +27,6 @@ import { useCanvasSize } from '../hooks/useCanvasSize'
 import { useTemplateManager } from '../hooks/useTemplateManager'
 import { useSlotManager } from '../hooks/useSlotManager'
 import { useDragManager } from '../hooks/useDragManager'
-import { useMarqueeSelection } from '../hooks/useMarqueeSelection'
 import { useExportScene, type ExportFormat, EXPORT_FORMAT_OPTIONS } from '../hooks/useExportScene'
 import { useSceneActions } from '../hooks/useSceneActions'
 import { useAssetManager } from '../hooks/useAssetManager'
@@ -42,10 +45,33 @@ import { CreateBlankCoverModal } from './panels/CreateBlankCoverModal'
 
 type SidebarSectionId = 'scene' | 'sources' | 'templates' | 'layers'
 
+function minimumWidth(element: SceneElement) {
+  if (isTextElement(element)) {
+    return 40
+  }
+
+  if (element.type === 'ellipse') {
+    return 14
+  }
+
+  return 28
+}
+
+function minimumHeight(element: SceneElement) {
+  if (isTextElement(element)) {
+    return Math.max(24, element.fontSize)
+  }
+
+  if (element.type === 'ellipse') {
+    return 14
+  }
+
+  return 28
+}
+
 export default function SceneEditor() {
   const [scene, setScene] = useState<Scene>(() => createDefaultScene())
   const [selection, setSelection] = useState<SelectionState>(() => createSelectionState())
-  const [hitTestStrategy] = useState<HitTestStrategy>('intersection')
   const [status, setStatus] = useState('正在读取本地场景...')
   const [appOrigin, setAppOrigin] = useState('')
   const [exportFormat, setExportFormat] = useState<ExportFormat>('png')
@@ -201,14 +227,35 @@ export default function SceneEditor() {
     customTemplatesRef.current = customTemplates
   }, [customTemplates, customTemplatesRef])
 
-  const { marquee, handleCanvasPointerDown } = useMarqueeSelection({
-    svgRef,
-    sceneElementsRef,
-    hitTestStrategy,
-    editingTextId,
-    setSelection,
-    setEditingTextId,
-  })
+  const selectoSelectableTargetIds = useMemo(() => {
+    return scene.elements
+      .filter((element) => !element.locked && element.hidden !== true)
+      .map((element) => element.id)
+  }, [scene.elements])
+
+  const handleSelectoDragStart = useCallback(
+    (isShiftPressed: boolean) => {
+      if (editingTextId) {
+        setEditingTextId(null)
+      }
+      if (!isShiftPressed) {
+        setSelection((prev) => clearSelection(prev))
+      }
+    },
+    [editingTextId, setEditingTextId, setSelection],
+  )
+
+  const handleSelectoSelectEnd = useCallback(
+    (selectedIds: string[], isShiftPressed: boolean) => {
+      setSelection((prev) => {
+        if (selectedIds.length === 0) {
+          return prev
+        }
+        return selectMultiple(prev, selectedIds, isShiftPressed)
+      })
+    },
+    [setSelection],
+  )
 
   const {
     drag,
@@ -244,22 +291,32 @@ export default function SceneEditor() {
     return scene.elements.find((element) => element.id === selection.selectedIds[0]) ?? null
   }, [scene.elements, selection.selectedIds])
 
-  const moveableTargetId = useMemo(() => {
-    if (selection.selectedIds.length !== 1 || editingTextId) {
-      return null
+  const moveableTargetIds = useMemo(() => {
+    if (editingTextId) {
+      return []
     }
-    const element = scene.elements.find((item) => item.id === selection.selectedIds[0])
-    if (!element || element.locked || element.hidden === true) {
-      return null
-    }
-    return element.id
+    return scene.elements
+      .filter(
+        (element) =>
+          selection.selectedIds.includes(element.id) && !element.locked && element.hidden !== true,
+      )
+      .map((element) => element.id)
   }, [selection.selectedIds, editingTextId, scene.elements])
 
-  const [isMoveableDragging, setIsMoveableDragging] = useState(false)
+  const moveableSnapTargetIds = useMemo(() => {
+    return scene.elements
+      .filter(
+        (element) =>
+          !selection.selectedIds.includes(element.id) && !element.locked && element.hidden !== true,
+      )
+      .map((element) => element.id)
+  }, [selection.selectedIds, scene.elements])
+
   const moveableDragStartRef = useRef<SceneElement | null>(null)
+  const moveableResizeStartRef = useRef<SceneElement | null>(null)
 
   const handleMoveableDragStart = useCallback(() => {
-    const id = moveableTargetId
+    const id = moveableTargetIds[0]
     if (!id) {
       return
     }
@@ -269,8 +326,7 @@ export default function SceneEditor() {
     }
     moveableDragStartRef.current = { ...element }
     saveHistory(`移动元素「${element.name}」`, scene)
-    setIsMoveableDragging(true)
-  }, [moveableTargetId, scene, saveHistory])
+  }, [moveableTargetIds, scene, saveHistory])
 
   const handleMoveableDrag = useCallback(
     (translateX: number, translateY: number) => {
@@ -293,7 +349,155 @@ export default function SceneEditor() {
 
   const handleMoveableDragEnd = useCallback(() => {
     moveableDragStartRef.current = null
-    setIsMoveableDragging(false)
+  }, [])
+
+  const handleMoveableResizeStart = useCallback(() => {
+    const id = moveableTargetIds[0]
+    if (!id) {
+      return
+    }
+    const element = scene.elements.find((item) => item.id === id)
+    if (!element) {
+      return
+    }
+    moveableResizeStartRef.current = { ...element }
+    saveHistory(`调整元素大小「${element.name}」`, scene)
+  }, [moveableTargetIds, scene, saveHistory])
+
+  const handleMoveableResize = useCallback(
+    (width: number, height: number) => {
+      const start = moveableResizeStartRef.current
+      if (!start) {
+        return
+      }
+      const minW = minimumWidth(start)
+      const minH = minimumHeight(start)
+      const maxW = Math.max(minW, canvasSize.width - start.x)
+      const maxH = Math.max(minH, canvasSize.height - start.y)
+      const nextW = clamp(width, minW, maxW)
+      const nextH = clamp(height, minH, maxH)
+      setScene((currentScene) => ({
+        ...currentScene,
+        elements: currentScene.elements.map((element) =>
+          element.id === start.id
+            ? ({ ...element, width: nextW, height: nextH } as SceneElement)
+            : element,
+        ),
+      }))
+      markSceneEdited()
+    },
+    [canvasSize.width, canvasSize.height, setScene, markSceneEdited],
+  )
+
+  const handleMoveableResizeEnd = useCallback(() => {
+    moveableResizeStartRef.current = null
+  }, [])
+
+  const moveableGroupDragStartRef = useRef<{
+    bounds: BoundingBox
+    elements: SceneElement[]
+  } | null>(null)
+  const moveableGroupResizeStartRef = useRef<{
+    bounds: BoundingBox
+    elements: SceneElement[]
+  } | null>(null)
+
+  const handleMoveableGroupDragStart = useCallback(() => {
+    const targets = scene.elements.filter((el) => moveableTargetIds.includes(el.id))
+    if (targets.length === 0) {
+      return
+    }
+    moveableGroupDragStartRef.current = {
+      bounds: computeBoundingBox(targets),
+      elements: targets.map((el) => ({ ...el })),
+    }
+    saveHistory(`移动 ${targets.length} 个元素`, scene)
+  }, [moveableTargetIds, scene, saveHistory])
+
+  const handleMoveableGroupDrag = useCallback(
+    (translateX: number, translateY: number) => {
+      const start = moveableGroupDragStartRef.current
+      if (!start) {
+        return
+      }
+      const nextX = clamp(
+        start.bounds.x + translateX,
+        -start.bounds.width + 24,
+        canvasSize.width - 24,
+      )
+      const nextY = clamp(
+        start.bounds.y + translateY,
+        -start.bounds.height + 24,
+        canvasSize.height - 24,
+      )
+      const deltaX = nextX - start.bounds.x
+      const deltaY = nextY - start.bounds.y
+      setScene((currentScene) => ({
+        ...currentScene,
+        elements: currentScene.elements.map((element) => {
+          const startEl = start.elements.find((e) => e.id === element.id)
+          if (!startEl) {
+            return element
+          }
+          return { ...element, x: startEl.x + deltaX, y: startEl.y + deltaY } as SceneElement
+        }),
+      }))
+      markSceneEdited()
+    },
+    [canvasSize.width, canvasSize.height, setScene, markSceneEdited],
+  )
+
+  const handleMoveableGroupDragEnd = useCallback(() => {
+    moveableGroupDragStartRef.current = null
+  }, [])
+
+  const handleMoveableGroupResizeStart = useCallback(() => {
+    const targets = scene.elements.filter((el) => moveableTargetIds.includes(el.id))
+    if (targets.length === 0) {
+      return
+    }
+    moveableGroupResizeStartRef.current = {
+      bounds: computeBoundingBox(targets),
+      elements: targets.map((el) => ({ ...el })),
+    }
+    saveHistory(`缩放 ${targets.length} 个元素`, scene)
+  }, [moveableTargetIds, scene, saveHistory])
+
+  const handleMoveableGroupResize = useCallback(
+    (groupWidth: number, groupHeight: number) => {
+      const start = moveableGroupResizeStartRef.current
+      if (!start || start.bounds.width <= 0 || start.bounds.height <= 0) {
+        return
+      }
+      const maxW = Math.max(10, canvasSize.width - start.bounds.x)
+      const maxH = Math.max(10, canvasSize.height - start.bounds.y)
+      const clampedW = clamp(groupWidth, 10, maxW)
+      const clampedH = clamp(groupHeight, 10, maxH)
+      const scaleX = clampedW / start.bounds.width
+      const scaleY = clampedH / start.bounds.height
+      setScene((currentScene) => ({
+        ...currentScene,
+        elements: currentScene.elements.map((element) => {
+          const startEl = start.elements.find((e) => e.id === element.id)
+          if (!startEl) {
+            return element
+          }
+          return {
+            ...element,
+            x: start.bounds.x + (startEl.x - start.bounds.x) * scaleX,
+            y: start.bounds.y + (startEl.y - start.bounds.y) * scaleY,
+            width: startEl.width * scaleX,
+            height: startEl.height * scaleY,
+          } as SceneElement
+        }),
+      }))
+      markSceneEdited()
+    },
+    [canvasSize.width, canvasSize.height, setScene, markSceneEdited],
+  )
+
+  const handleMoveableGroupResizeEnd = useCallback(() => {
+    moveableGroupResizeStartRef.current = null
   }, [])
 
   const { visibleGuides, visibleSpacingGuides } = useVisibleGuides(
@@ -529,25 +733,35 @@ export default function SceneEditor() {
             spacingGuides={visibleSpacingGuides}
             resizeLabel={resizeLabel}
             svgRef={svgRef}
-            marquee={marquee}
-            hitTestStrategy={hitTestStrategy}
             editingTextId={editingTextId}
             isGroupDragging={drag?.mode === 'group-move'}
             canvasWidth={canvasSize.width}
             canvasHeight={canvasSize.height}
             resolveSrc={resolveSrc}
-            onCanvasPointerDown={handleCanvasPointerDown}
             onElementPointerDown={handleElementPointerDown}
             onResizePointerDown={handleResizePointerDown}
             onGroupDragPointerDown={handleGroupDragPointerDown}
             onGroupResizePointerDown={handleGroupResizePointerDown}
             onTextElementDoubleClick={handleTextElementDoubleClick}
-            moveableTargetId={moveableTargetId}
+            moveableTargetIds={moveableTargetIds}
+            moveableSnapTargetIds={moveableSnapTargetIds}
             moveableEnabled
-            isMoveableDragging={isMoveableDragging}
             onMoveableDragStart={handleMoveableDragStart}
             onMoveableDrag={handleMoveableDrag}
             onMoveableDragEnd={handleMoveableDragEnd}
+            onMoveableResizeStart={handleMoveableResizeStart}
+            onMoveableResize={handleMoveableResize}
+            onMoveableResizeEnd={handleMoveableResizeEnd}
+            onMoveableGroupDragStart={handleMoveableGroupDragStart}
+            onMoveableGroupDrag={handleMoveableGroupDrag}
+            onMoveableGroupDragEnd={handleMoveableGroupDragEnd}
+            onMoveableGroupResizeStart={handleMoveableGroupResizeStart}
+            onMoveableGroupResize={handleMoveableGroupResize}
+            onMoveableGroupResizeEnd={handleMoveableGroupResizeEnd}
+            selectoSelectableTargetIds={selectoSelectableTargetIds}
+            selectoEnabled
+            onSelectoDragStart={handleSelectoDragStart}
+            onSelectoSelectEnd={handleSelectoSelectEnd}
           />
 
           <div

@@ -444,12 +444,7 @@ export function useDragManager({
         return
       }
 
-      if (
-        moveableSingleDragEnabled &&
-        wasSelected &&
-        selection.selectedIds.length === 1 &&
-        !isShiftPressed
-      ) {
+      if (moveableSingleDragEnabled && wasSelected && !isShiftPressed) {
         return
       }
 
