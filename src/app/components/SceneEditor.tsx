@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent } from 'react'
 import {
   cloneScene,
   createDefaultScene,
@@ -9,7 +9,8 @@ import {
   createSelectionState,
   selectSingle,
   type SelectionState,
-  type HitTestStrategy,
+  clearSelection,
+  selectMultiple,
 } from '@/domain'
 import editorStyles from './editor/editor.module.css'
 import { useScrollVisibility } from '../lib/use-scroll-visibility'
@@ -22,7 +23,6 @@ import { useCanvasSize } from '../hooks/useCanvasSize'
 import { useTemplateManager } from '../hooks/useTemplateManager'
 import { useSlotManager } from '../hooks/useSlotManager'
 import { useDragManager } from '../hooks/useDragManager'
-import { useMarqueeSelection } from '../hooks/useMarqueeSelection'
 import { useExportScene, type ExportFormat, EXPORT_FORMAT_OPTIONS } from '../hooks/useExportScene'
 import { useSceneActions } from '../hooks/useSceneActions'
 import { useAssetManager } from '../hooks/useAssetManager'
@@ -44,7 +44,6 @@ type SidebarSectionId = 'scene' | 'sources' | 'templates' | 'layers'
 export default function SceneEditor() {
   const [scene, setScene] = useState<Scene>(() => createDefaultScene())
   const [selection, setSelection] = useState<SelectionState>(() => createSelectionState())
-  const [hitTestStrategy] = useState<HitTestStrategy>('intersection')
   const [status, setStatus] = useState('正在读取本地场景...')
   const [appOrigin, setAppOrigin] = useState('')
   const [exportFormat, setExportFormat] = useState<ExportFormat>('png')
@@ -52,6 +51,14 @@ export default function SceneEditor() {
   const svgRef = useRef<SVGSVGElement>(null)
   const sceneElementsRef = useRef<SceneElement[]>(scene.elements)
   const selectedElementRef = useRef<SceneElement | null>(null)
+  const moveableOriginRef = useRef<{ x: number; y: number; width: number; height: number } | null>(
+    null,
+  )
+  const sceneRef = useRef(scene)
+
+  useEffect(() => {
+    sceneRef.current = scene
+  })
   const [collapsedSections, setCollapsedSections] = useState<Record<SidebarSectionId, boolean>>({
     scene: false,
     sources: false,
@@ -200,15 +207,6 @@ export default function SceneEditor() {
     customTemplatesRef.current = customTemplates
   }, [customTemplates, customTemplatesRef])
 
-  const { marquee, handleCanvasPointerDown } = useMarqueeSelection({
-    svgRef,
-    sceneElementsRef,
-    hitTestStrategy,
-    editingTextId,
-    setSelection,
-    setEditingTextId,
-  })
-
   const {
     drag,
     guides,
@@ -281,6 +279,124 @@ export default function SceneEditor() {
       markSceneEdited()
     },
     [scene, saveHistory, markSceneEdited],
+  )
+
+  // Selecto：所有可见且未锁定的元素 ID，作为框选可选目标
+  const selectoSelectableTargetIds = useMemo(() => {
+    return scene.elements
+      .filter((element) => element.hidden !== true && !element.locked)
+      .map((element) => element.id)
+  }, [scene.elements])
+
+  const handleSelectoDragStart = useCallback(() => {
+    // 退出文本编辑模式
+    if (editingTextId) {
+      setEditingTextId(null)
+    }
+  }, [editingTextId, setEditingTextId])
+
+  const handleSelectoSelectEnd = useCallback((selectedIds: string[], isShiftPressed: boolean) => {
+    setSelection((prev) => selectMultiple(prev, selectedIds, isShiftPressed))
+  }, [])
+
+  // 点击画布空白区域时清空选择（Selecto 仅处理拖拽框选，不处理单击）
+  const handleCanvasPointerDown = useCallback(
+    (event: PointerEvent<SVGSVGElement>) => {
+      if (!event.shiftKey) {
+        setSelection((prev) => clearSelection(prev))
+      }
+      if (editingTextId) {
+        setEditingTextId(null)
+      }
+    },
+    [editingTextId, setEditingTextId],
+  )
+
+  // Moveable：单元素选中时启用拖拽 + 缩放
+  const moveableTargetId = useMemo(() => {
+    return selection.selectedIds.length === 1 ? selection.selectedIds[0] : null
+  }, [selection.selectedIds])
+
+  const handleMoveableDragStart = useCallback((targetId: string) => {
+    const el = sceneRef.current.elements.find((e) => e.id === targetId)
+    if (el) {
+      moveableOriginRef.current = { x: el.x, y: el.y, width: el.width, height: el.height }
+    }
+  }, [])
+
+  const handleMoveableDragEnd = useCallback(
+    (targetId: string, dx: number, dy: number) => {
+      const origin = moveableOriginRef.current
+      if (!origin) return
+      moveableOriginRef.current = null
+
+      const snapDx = Math.round(dx)
+      const snapDy = Math.round(dy)
+
+      if (snapDx === 0 && snapDy === 0) return
+
+      const newX = origin.x + snapDx
+      const newY = origin.y + snapDy
+
+      changeScene(
+        (prev) => ({
+          ...prev,
+          elements: prev.elements.map((el) =>
+            el.id === targetId ? { ...el, x: newX, y: newY } : el,
+          ),
+        }),
+        '移动元素',
+      )
+      markSceneEdited()
+    },
+    [changeScene, markSceneEdited],
+  )
+
+  const handleMoveableResizeStart = useCallback((targetId: string) => {
+    const el = sceneRef.current.elements.find((e) => e.id === targetId)
+    if (el) {
+      moveableOriginRef.current = { x: el.x, y: el.y, width: el.width, height: el.height }
+    }
+  }, [])
+
+  const handleMoveableResizeEnd = useCallback(
+    (targetId: string, newWidth: number, newHeight: number, dragDx: number, dragDy: number) => {
+      const origin = moveableOriginRef.current
+      if (!origin) return
+      moveableOriginRef.current = null
+
+      const minSize = 16
+      const clampedWidth = Math.max(minSize, Math.round(newWidth))
+      const clampedHeight = Math.max(minSize, Math.round(newHeight))
+      const snapDx = Math.round(dragDx)
+      const snapDy = Math.round(dragDy)
+
+      if (
+        clampedWidth === origin.width &&
+        clampedHeight === origin.height &&
+        snapDx === 0 &&
+        snapDy === 0
+      ) {
+        return
+      }
+
+      const newX = origin.x + snapDx
+      const newY = origin.y + snapDy
+
+      changeScene(
+        (prev) => ({
+          ...prev,
+          elements: prev.elements.map((el) =>
+            el.id === targetId
+              ? { ...el, x: newX, y: newY, width: clampedWidth, height: clampedHeight }
+              : el,
+          ),
+        }),
+        '调整大小',
+      )
+      markSceneEdited()
+    },
+    [changeScene, markSceneEdited],
   )
 
   const {
@@ -475,8 +591,7 @@ export default function SceneEditor() {
             spacingGuides={visibleSpacingGuides}
             resizeLabel={resizeLabel}
             svgRef={svgRef}
-            marquee={marquee}
-            hitTestStrategy={hitTestStrategy}
+            selectableTargetIds={selectoSelectableTargetIds}
             editingTextId={editingTextId}
             isGroupDragging={drag?.mode === 'group-move'}
             canvasWidth={canvasSize.width}
@@ -488,6 +603,13 @@ export default function SceneEditor() {
             onGroupDragPointerDown={handleGroupDragPointerDown}
             onGroupResizePointerDown={handleGroupResizePointerDown}
             onTextElementDoubleClick={handleTextElementDoubleClick}
+            onSelectoDragStart={handleSelectoDragStart}
+            onSelectoSelectEnd={handleSelectoSelectEnd}
+            moveableTargetId={moveableTargetId}
+            onMoveableDragStart={handleMoveableDragStart}
+            onMoveableDragEnd={handleMoveableDragEnd}
+            onMoveableResizeStart={handleMoveableResizeStart}
+            onMoveableResizeEnd={handleMoveableResizeEnd}
           />
 
           <div

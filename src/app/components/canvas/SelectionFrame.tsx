@@ -4,9 +4,11 @@ import { type SceneElement, elementBounds } from '@/domain'
 export function SelectionFrame({
   element,
   onResizePointerDown,
+  showResizeHandle = true,
 }: {
   element: SceneElement
   onResizePointerDown?: (elementId: string, event: PointerEvent<SVGRectElement>) => void
+  showResizeHandle?: boolean
 }) {
   const bounds = elementBounds(element)
   const handleSize = 20
@@ -35,6 +37,7 @@ export function SelectionFrame({
         stroke="#132060"
         strokeWidth="2"
         vectorEffect="non-scaling-stroke"
+        display={showResizeHandle ? undefined : 'none'}
         onPointerDown={(event) => {
           event.stopPropagation()
           onResizePointerDown?.(element.id, event)

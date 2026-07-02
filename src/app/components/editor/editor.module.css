@@ -267,6 +267,7 @@
 
 .scenePreviewFrame {
   flex: 0 0 auto;
+  position: relative;
   transition: width 0.12s ease;
 }
 

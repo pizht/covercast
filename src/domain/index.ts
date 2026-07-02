@@ -51,24 +51,6 @@ export {
   formatDimension,
 } from './transform'
 
-// Marquee (selection-box + hit-test)
-export {
-  type MarqueeState,
-  type HitTestStrategy,
-  createMarqueeState,
-  startMarquee,
-  updateMarquee,
-  clearMarquee,
-  getMarqueeRect,
-  isMarqueeActive,
-  hasMarqueeSize,
-  getElementBounds,
-  intersectsRect,
-  containsRect,
-  hitTestElement,
-  hitTestElements,
-} from './marquee'
-
 // SVG serialization (scene → svg markup)
 export {
   resolvePaint,

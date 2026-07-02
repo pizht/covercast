@@ -1,29 +1,24 @@
-import { useEffect, useState, type PointerEvent, type Ref } from 'react'
+import { useEffect, useState, type PointerEvent } from 'react'
+import type { RefObject } from 'react'
+import { useRef } from 'react'
 import {
   DEFAULT_CANVAS_WIDTH,
   DEFAULT_CANVAS_HEIGHT,
   type Scene,
-  type SceneElement,
   type GuideLine,
   type MeasurementGuide,
   type ResizeLabel,
-  getMarqueeRect,
-  hasMarqueeSize,
-  hitTestElements,
-  isMarqueeActive,
-  type HitTestStrategy,
-  type MarqueeState,
   type ResizeHandleType,
 } from '@/domain'
 import { SceneDefs, backgroundMaskId, hasBackgroundCutouts } from './canvas/SceneDefs'
 import { ElementView } from './canvas/elements/ElementView'
 import { SelectionFrame } from './canvas/SelectionFrame'
 import { GroupSelectionFrame } from './canvas/GroupSelectionFrame'
-import { MarqueeOverlay } from './canvas/MarqueeOverlay'
 import { SmartGuideOverlay } from './canvas/SmartGuideOverlay'
 import { ResizeLabelOverlay } from './canvas/ResizeLabelOverlay'
 import { SpacingGuideOverlay } from './canvas/SpacingGuideOverlay'
 import { MoveableLayer } from './canvas/MoveableLayer'
+import { SelectoLayer } from './canvas/SelectoLayer'
 
 type SceneCanvasProps = {
   scene: Scene
@@ -35,9 +30,8 @@ type SceneCanvasProps = {
   guides?: GuideLine[]
   spacingGuides?: MeasurementGuide[]
   resizeLabel?: ResizeLabel | null
-  svgRef?: Ref<SVGSVGElement>
-  marquee?: MarqueeState
-  hitTestStrategy?: HitTestStrategy
+  svgRef?: RefObject<SVGSVGElement | null>
+  selectableTargetIds?: string[]
   editingTextId?: string | null
   isGroupDragging?: boolean
   canvasWidth?: number
@@ -49,6 +43,29 @@ type SceneCanvasProps = {
   onGroupDragPointerDown?: (event: PointerEvent<SVGRectElement>) => void
   onGroupResizePointerDown?: (handle: ResizeHandleType, event: PointerEvent<SVGRectElement>) => void
   onTextElementDoubleClick?: (elementId: string) => void
+  onSelectoDragStart?: () => void
+  onSelectoSelectEnd?: (selectedIds: string[], isShiftPressed: boolean) => void
+  // Moveable
+  moveableTargetId?: string | null
+  canvasZoom?: number
+  onMoveableDragStart?: (targetId: string) => void
+  onMoveableDrag?: (targetId: string, dx: number, dy: number) => void
+  onMoveableDragEnd?: (targetId: string, dx: number, dy: number) => void
+  onMoveableResizeStart?: (targetId: string) => void
+  onMoveableResize?: (
+    targetId: string,
+    width: number,
+    height: number,
+    dx: number,
+    dy: number,
+  ) => void
+  onMoveableResizeEnd?: (
+    targetId: string,
+    width: number,
+    height: number,
+    dx: number,
+    dy: number,
+  ) => void
 }
 
 export default function SceneCanvas({
@@ -62,8 +79,7 @@ export default function SceneCanvas({
   spacingGuides,
   resizeLabel,
   svgRef,
-  marquee,
-  hitTestStrategy = 'intersection',
+  selectableTargetIds = [],
   editingTextId,
   isGroupDragging = false,
   canvasWidth = DEFAULT_CANVAS_WIDTH,
@@ -75,8 +91,22 @@ export default function SceneCanvas({
   onGroupDragPointerDown,
   onGroupResizePointerDown,
   onTextElementDoubleClick,
+  onSelectoDragStart,
+  onSelectoSelectEnd,
+  moveableTargetId,
+  canvasZoom = 1,
+  onMoveableDragStart,
+  onMoveableDrag,
+  onMoveableDragEnd,
+  onMoveableResizeStart,
+  onMoveableResize,
+  onMoveableResizeEnd,
 }: SceneCanvasProps) {
   const [shiftKeyPressed, setShiftKeyPressed] = useState(false)
+
+  // svgRef 可能由外部传入，fallback 内部 ref 供 SelectoLayer 使用
+  const internalSvgRef = useRef<SVGSVGElement>(null)
+  const effectiveSvgRef = svgRef ?? internalSvgRef
 
   useEffect(() => {
     if (!interactive) return
@@ -104,18 +134,12 @@ export default function SceneCanvas({
 
   const visibleElements = scene.elements.filter((element) => element.hidden !== true)
   const selectedElements = visibleElements.filter((element) => selectedIds.includes(element.id))
-
-  let marqueePreviewElements: SceneElement[] = []
-  if (marquee && isMarqueeActive(marquee) && hasMarqueeSize(marquee, 5)) {
-    const rect = getMarqueeRect(marquee)
-    const hitIds = hitTestElements(rect, visibleElements, hitTestStrategy)
-    marqueePreviewElements = visibleElements.filter((element) => hitIds.includes(element.id))
-  }
+  const moveableEnabled = interactive && selectedIds.length === 1 && moveableTargetId != null
 
   return (
     <>
       <svg
-        ref={svgRef}
+        ref={effectiveSvgRef}
         className={className}
         viewBox={`0 0 ${canvasWidth} ${canvasHeight}`}
         role="img"
@@ -176,8 +200,11 @@ export default function SceneCanvas({
               <SelectionFrame
                 key={element.id}
                 element={element}
+                showResizeHandle={!moveableEnabled}
                 onResizePointerDown={
-                  selectedElements.length === 1 ? onResizePointerDown : undefined
+                  selectedElements.length === 1 && !moveableEnabled
+                    ? onResizePointerDown
+                    : undefined
                 }
               />
             ))}
@@ -192,17 +219,6 @@ export default function SceneCanvas({
           </>
         ) : null}
 
-        {interactive && marquee && isMarqueeActive(marquee) ? (
-          <MarqueeOverlay marquee={marquee} />
-        ) : null}
-
-        {interactive && marqueePreviewElements.length > 0 ? (
-          <GroupSelectionFrame
-            elements={marqueePreviewElements}
-            shiftKeyPressed={shiftKeyPressed}
-          />
-        ) : null}
-
         {guides && guides.length > 0 ? <SmartGuideOverlay guides={guides} /> : null}
 
         {resizeLabel ? <ResizeLabelOverlay resizeLabel={resizeLabel} /> : null}
@@ -211,7 +227,25 @@ export default function SceneCanvas({
           <SpacingGuideOverlay spacingGuides={spacingGuides} />
         ) : null}
       </svg>
-      <MoveableLayer svgRef={svgRef} enabled={false} />
+      <MoveableLayer
+        svgRef={effectiveSvgRef}
+        enabled={moveableEnabled}
+        targetId={moveableTargetId ?? null}
+        canvasZoom={canvasZoom}
+        onDragStart={onMoveableDragStart}
+        onDrag={onMoveableDrag}
+        onDragEnd={onMoveableDragEnd}
+        onResizeStart={onMoveableResizeStart}
+        onResize={onMoveableResize}
+        onResizeEnd={onMoveableResizeEnd}
+      />
+      <SelectoLayer
+        svgRef={effectiveSvgRef}
+        selectableTargetIds={selectableTargetIds}
+        enabled={interactive}
+        onDragStart={onSelectoDragStart}
+        onSelectEnd={onSelectoSelectEnd}
+      />
     </>
   )
 }

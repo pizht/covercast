@@ -1,16 +1,9 @@
 'use client'
 
 import type { Ref, WheelEvent as ReactWheelEvent, PointerEvent } from 'react'
+import type { RefObject } from 'react'
 import SceneCanvas from '../SceneCanvas'
-import type {
-  Scene,
-  GuideLine,
-  MeasurementGuide,
-  ResizeLabel,
-  HitTestStrategy,
-  MarqueeState,
-  ResizeHandleType,
-} from '@/domain'
+import type { Scene, GuideLine, MeasurementGuide, ResizeLabel, ResizeHandleType } from '@/domain'
 import { Slider } from '@/shared/components/ui'
 import styles from './editor.module.css'
 
@@ -39,9 +32,8 @@ type StagePanelProps = {
   guides?: GuideLine[]
   spacingGuides?: MeasurementGuide[]
   resizeLabel?: ResizeLabel | null
-  svgRef?: Ref<SVGSVGElement>
-  marquee?: MarqueeState
-  hitTestStrategy?: HitTestStrategy
+  svgRef?: RefObject<SVGSVGElement | null>
+  selectableTargetIds?: string[]
   editingTextId?: string | null
   isGroupDragging?: boolean
   canvasWidth?: number
@@ -53,6 +45,28 @@ type StagePanelProps = {
   onGroupDragPointerDown?: (event: PointerEvent<SVGRectElement>) => void
   onGroupResizePointerDown?: (handle: ResizeHandleType, event: PointerEvent<SVGRectElement>) => void
   onTextElementDoubleClick?: (elementId: string) => void
+  onSelectoDragStart?: () => void
+  onSelectoSelectEnd?: (selectedIds: string[], isShiftPressed: boolean) => void
+  // Moveable
+  moveableTargetId?: string | null
+  onMoveableDragStart?: (targetId: string) => void
+  onMoveableDrag?: (targetId: string, dx: number, dy: number) => void
+  onMoveableDragEnd?: (targetId: string, dx: number, dy: number) => void
+  onMoveableResizeStart?: (targetId: string) => void
+  onMoveableResize?: (
+    targetId: string,
+    width: number,
+    height: number,
+    dx: number,
+    dy: number,
+  ) => void
+  onMoveableResizeEnd?: (
+    targetId: string,
+    width: number,
+    height: number,
+    dx: number,
+    dy: number,
+  ) => void
 }
 
 export function StagePanel({
@@ -76,8 +90,7 @@ export function StagePanel({
   spacingGuides,
   resizeLabel,
   svgRef,
-  marquee,
-  hitTestStrategy,
+  selectableTargetIds,
   editingTextId,
   isGroupDragging,
   canvasWidth,
@@ -89,6 +102,15 @@ export function StagePanel({
   onGroupDragPointerDown,
   onGroupResizePointerDown,
   onTextElementDoubleClick,
+  onSelectoDragStart,
+  onSelectoSelectEnd,
+  moveableTargetId,
+  onMoveableDragStart,
+  onMoveableDrag,
+  onMoveableDragEnd,
+  onMoveableResizeStart,
+  onMoveableResize,
+  onMoveableResizeEnd,
 }: StagePanelProps) {
   return (
     <section className={styles.stagePanel} aria-label="Canvas preview">
@@ -162,8 +184,7 @@ export function StagePanel({
               spacingGuides={spacingGuides}
               resizeLabel={resizeLabel}
               svgRef={svgRef}
-              marquee={marquee}
-              hitTestStrategy={hitTestStrategy}
+              selectableTargetIds={selectableTargetIds}
               editingTextId={editingTextId}
               isGroupDragging={isGroupDragging}
               canvasWidth={canvasWidth}
@@ -175,6 +196,16 @@ export function StagePanel({
               onGroupDragPointerDown={onGroupDragPointerDown}
               onGroupResizePointerDown={onGroupResizePointerDown}
               onTextElementDoubleClick={onTextElementDoubleClick}
+              onSelectoDragStart={onSelectoDragStart}
+              onSelectoSelectEnd={onSelectoSelectEnd}
+              moveableTargetId={moveableTargetId}
+              canvasZoom={canvasZoom}
+              onMoveableDragStart={onMoveableDragStart}
+              onMoveableDrag={onMoveableDrag}
+              onMoveableDragEnd={onMoveableDragEnd}
+              onMoveableResizeStart={onMoveableResizeStart}
+              onMoveableResize={onMoveableResize}
+              onMoveableResizeEnd={onMoveableResizeEnd}
             />
           </div>
         </div>
