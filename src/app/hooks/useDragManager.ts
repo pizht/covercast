@@ -465,19 +465,7 @@ export function useDragManager({
         }
       }
 
-      const otherElements = scene.elements.filter(
-        (el) => el.id !== elementId && !el.locked && el.hidden !== true,
-      )
-      spatialIndexRef.current = buildSpatialIndex(otherElements)
-
-      saveHistory(`移动元素「${element.name}」`, scene)
-      setDrag({
-        id: elementId,
-        mode: 'move',
-        startX: point.x,
-        startY: point.y,
-        element: { ...element },
-      })
+      // 单元素拖拽已由 react-moveable 接管，此处不再启动原生 move 拖拽
     },
     [scene, selection, editingTextId, svgRef, setSelection, setEditingTextId, saveHistory],
   )

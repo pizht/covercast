@@ -1,6 +1,7 @@
 'use client'
 
 import type { Ref, WheelEvent as ReactWheelEvent, PointerEvent } from 'react'
+import Moveable from 'react-moveable'
 import SceneCanvas from '../SceneCanvas'
 import type {
   Scene,
@@ -13,6 +14,12 @@ import type {
 } from '@/domain'
 import { Slider } from '@/shared/components/ui'
 import styles from './editor.module.css'
+
+type MoveableDragEvent = {
+  target: HTMLElement
+  transform: string
+  translate: [number, number]
+}
 
 type StagePanelProps = {
   // Status
@@ -53,6 +60,12 @@ type StagePanelProps = {
   onGroupDragPointerDown?: (event: PointerEvent<SVGRectElement>) => void
   onGroupResizePointerDown?: (handle: ResizeHandleType, event: PointerEvent<SVGRectElement>) => void
   onTextElementDoubleClick?: (elementId: string) => void
+  // react-moveable 单元素拖拽
+  moveableEnabled?: boolean
+  moveableTargetRef?: Ref<SVGGElement>
+  onMoveableDragStart?: (e: MoveableDragEvent) => void
+  onMoveableDrag?: (e: { translate: [number, number] }) => void
+  onMoveableDragEnd?: () => void
 }
 
 export function StagePanel({
@@ -89,6 +102,12 @@ export function StagePanel({
   onGroupDragPointerDown,
   onGroupResizePointerDown,
   onTextElementDoubleClick,
+  // react-moveable
+  moveableEnabled,
+  moveableTargetRef,
+  onMoveableDragStart,
+  onMoveableDrag,
+  onMoveableDragEnd,
 }: StagePanelProps) {
   return (
     <section className={styles.stagePanel} aria-label="Canvas preview">
@@ -176,6 +195,19 @@ export function StagePanel({
               onGroupResizePointerDown={onGroupResizePointerDown}
               onTextElementDoubleClick={onTextElementDoubleClick}
             />
+            {moveableEnabled && (
+              <Moveable
+                target={moveableTargetRef as any}
+                draggable={true}
+                throttleDrag={1}
+                edgeDraggable={false}
+                startDragRotate={0}
+                throttleDragRotate={0}
+                onDragStart={onMoveableDragStart as any}
+                onDrag={onMoveableDrag as any}
+                onDragEnd={onMoveableDragEnd as any}
+              />
+            )}
           </div>
         </div>
       </div>

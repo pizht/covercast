@@ -1,6 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import Moveable from 'react-moveable'
 import {
   cloneScene,
   createDefaultScene,
@@ -52,6 +53,11 @@ export default function SceneEditor() {
   const svgRef = useRef<SVGSVGElement>(null)
   const sceneElementsRef = useRef<SceneElement[]>(scene.elements)
   const selectedElementRef = useRef<SceneElement | null>(null)
+  const moveableTargetRef = useRef<SVGGElement | null>(null)
+  const moveableDragStartRef = useRef<{ x: number; y: number } | null>(null)
+  const moveableRafRef = useRef(0)
+  const moveableLatestTranslateRef = useRef<[number, number] | null>(null)
+  const [moveableReady, setMoveableReady] = useState(false)
   const [collapsedSections, setCollapsedSections] = useState<Record<SidebarSectionId, boolean>>({
     scene: false,
     sources: false,
@@ -254,6 +260,20 @@ export default function SceneEditor() {
     selectedElementRef.current = selectedElement
   }, [scene.elements, selectedElement])
 
+  // 更新 react-moveable 的目标 DOM 元素引用
+  useEffect(() => {
+    if (selectedElement && svgRef.current) {
+      const el = svgRef.current.querySelector(
+        `[data-element-id="${selectedElement.id}"]`,
+      ) as SVGGElement | null
+      moveableTargetRef.current = el
+      setMoveableReady(el != null)
+    } else {
+      moveableTargetRef.current = null
+      setMoveableReady(false)
+    }
+  }, [selectedElement])
+
   useEffect(() => {
     const timer = window.setTimeout(() => {
       setAppOrigin(window.location.origin)
@@ -363,6 +383,72 @@ export default function SceneEditor() {
     setSelection(selectSingle(selection, elementId))
     setEditingTextId(elementId)
   }
+
+  // react-moveable 单元素拖拽处理器
+  const handleMoveableDragStart = useCallback(
+    (_e: { target: HTMLElement; transform: string }) => {
+      if (!selectedElement) return
+      moveableDragStartRef.current = { x: selectedElement.x, y: selectedElement.y }
+      const snapshot = cloneScene(scene)
+      saveHistory(`移动元素「${selectedElement.name}」`, snapshot)
+    },
+    [selectedElement, scene, saveHistory],
+  )
+
+  const handleMoveableDrag = useCallback(
+    (e: { translate: [number, number] }) => {
+      moveableLatestTranslateRef.current = e.translate
+      if (moveableRafRef.current === 0) {
+        moveableRafRef.current = requestAnimationFrame(() => {
+          moveableRafRef.current = 0
+          const translate = moveableLatestTranslateRef.current
+          const startPos = moveableDragStartRef.current
+          if (!translate || !startPos || !selectedElement) return
+
+          const svg = svgRef.current
+          if (!svg) return
+          const svgRect = svg.getBoundingClientRect()
+          const scaleX = canvasSize.width / svgRect.width
+          const scaleY = canvasSize.height / svgRect.height
+
+          const newX = startPos.x + translate[0] * scaleX
+          const newY = startPos.y + translate[1] * scaleY
+
+          const clampedX = Math.max(
+            -selectedElement.width + 24,
+            Math.min(newX, canvasSize.width - 24),
+          )
+          const clampedY = Math.max(
+            -selectedElement.height + 24,
+            Math.min(newY, canvasSize.height - 24),
+          )
+
+          setScene((prev) => ({
+            ...prev,
+            elements: prev.elements.map((el) =>
+              el.id === selectedElement.id
+                ? ({ ...el, x: clampedX, y: clampedY } as SceneElement)
+                : el,
+            ),
+          }))
+          markSceneEdited()
+        })
+      }
+    },
+    [selectedElement, svgRef, canvasSize, setScene, markSceneEdited],
+  )
+
+  const handleMoveableDragEnd = useCallback(() => {
+    if (moveableRafRef.current !== 0) {
+      cancelAnimationFrame(moveableRafRef.current)
+      moveableRafRef.current = 0
+    }
+    moveableDragStartRef.current = null
+    moveableLatestTranslateRef.current = null
+  }, [])
+
+  const moveableEnabled =
+    selectedElement != null && !selectedElement.locked && editingTextId == null && moveableReady
 
   return (
     <>
@@ -488,6 +574,12 @@ export default function SceneEditor() {
             onGroupDragPointerDown={handleGroupDragPointerDown}
             onGroupResizePointerDown={handleGroupResizePointerDown}
             onTextElementDoubleClick={handleTextElementDoubleClick}
+            // react-moveable 单元素拖拽
+            moveableEnabled={moveableEnabled}
+            moveableTargetRef={moveableTargetRef}
+            onMoveableDragStart={handleMoveableDragStart}
+            onMoveableDrag={handleMoveableDrag}
+            onMoveableDragEnd={handleMoveableDragEnd}
           />
 
           <div
