@@ -3,7 +3,7 @@
 import type { Ref, WheelEvent as ReactWheelEvent, PointerEvent } from 'react'
 import SceneCanvas from '../SceneCanvas'
 import MoveableLayer from '../canvas/MoveableLayer'
-import type { Scene, GuideLine, MeasurementGuide, ResizeLabel, ResizeHandleType } from '@/domain'
+import type { Scene, MeasurementGuide } from '@/domain'
 import { Slider } from '@/shared/components/ui'
 import styles from './editor.module.css'
 
@@ -29,19 +29,13 @@ type StagePanelProps = {
   // SceneCanvas props
   scene: Scene
   selectedIds: string[]
-  guides?: GuideLine[]
   spacingGuides?: MeasurementGuide[]
-  resizeLabel?: ResizeLabel | null
   svgRef?: Ref<SVGSVGElement>
   editingTextId?: string | null
-  isGroupDragging?: boolean
   canvasWidth?: number
   canvasHeight?: number
   resolveSrc?: (src: string) => string
   onElementPointerDown?: (elementId: string, event: PointerEvent<SVGGElement>) => void
-  onResizePointerDown?: (elementId: string, event: PointerEvent<SVGRectElement>) => void
-  onGroupDragPointerDown?: (event: PointerEvent<SVGRectElement>) => void
-  onGroupResizePointerDown?: (handle: ResizeHandleType, event: PointerEvent<SVGRectElement>) => void
   onTextElementDoubleClick?: (elementId: string) => void
   onSceneChange?: (updater: (scene: Scene) => Scene, description?: string) => void
 }
@@ -63,19 +57,13 @@ export function StagePanel({
   stageViewportRef,
   scene,
   selectedIds,
-  guides,
   spacingGuides,
-  resizeLabel,
   svgRef,
   editingTextId,
-  isGroupDragging,
   canvasWidth,
   canvasHeight,
   resolveSrc,
   onElementPointerDown,
-  onResizePointerDown,
-  onGroupDragPointerDown,
-  onGroupResizePointerDown,
   onTextElementDoubleClick,
   onSceneChange,
 }: StagePanelProps) {
@@ -148,19 +136,13 @@ export function StagePanel({
               idPrefix="editor"
               interactive
               selectedIds={selectedIds}
-              guides={guides}
               spacingGuides={spacingGuides}
-              resizeLabel={resizeLabel}
               svgRef={svgRef}
               editingTextId={editingTextId}
-              isGroupDragging={isGroupDragging}
               canvasWidth={canvasWidth}
               canvasHeight={canvasHeight}
               resolveSrc={resolveSrc}
               onElementPointerDown={onElementPointerDown}
-              onResizePointerDown={onResizePointerDown}
-              onGroupDragPointerDown={onGroupDragPointerDown}
-              onGroupResizePointerDown={onGroupResizePointerDown}
               onTextElementDoubleClick={onTextElementDoubleClick}
             />
             {onSceneChange ? (

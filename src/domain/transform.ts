@@ -1,14 +1,6 @@
-/**
- * @file Element geometry utilities.
- *
- * Provides bounding-box computation and a dimension formatter for display
- * labels. Drag/resize/scale operations have been migrated to react-moveable
- * and are no longer defined here.
- */
+/** Element geometry utilities — bounding-box computation. */
 
 import type { SceneElement } from './scene'
-
-export type ResizeHandleType = 'nw' | 'n' | 'ne' | 'e' | 'se' | 's' | 'sw' | 'w'
 
 export type BoundingBox = {
   x: number
@@ -44,12 +36,4 @@ export function computeBoundingBox(elements: SceneElement[]): BoundingBox {
     width: maxX - minX,
     height: maxY - minY,
   }
-}
-
-/**
- * Formats a `width × height` pair as a rounded display string.
- * @returns A string like `"300 × 180"`.
- */
-export function formatDimension(width: number, height: number): string {
-  return `${Math.round(width)} × ${Math.round(height)}`
 }

@@ -9,6 +9,7 @@ import {
   createSelectionState,
   selectSingle,
   type SelectionState,
+  type MeasurementGuide,
 } from '@/domain'
 import editorStyles from './editor/editor.module.css'
 import { useScrollVisibility } from '../lib/use-scroll-visibility'
@@ -46,6 +47,7 @@ export default function SceneEditor() {
   const [appOrigin, setAppOrigin] = useState('')
   const [exportFormat, setExportFormat] = useState<ExportFormat>('png')
   const [guidesSelectedIds, setGuidesSelectedIds] = useState<string[]>([])
+  const [spacingGuides, setSpacingGuides] = useState<MeasurementGuide[]>([])
   const svgRef = useRef<SVGSVGElement>(null)
   const sceneElementsRef = useRef<SceneElement[]>(scene.elements)
   const selectedElementRef = useRef<SceneElement | null>(null)
@@ -197,18 +199,7 @@ export default function SceneEditor() {
     customTemplatesRef.current = customTemplates
   }, [customTemplates, customTemplatesRef])
 
-  const {
-    guides,
-    spacingGuides,
-    resizeLabel,
-    spatialIndexRef,
-    setGuides,
-    setSpacingGuides,
-    handleElementPointerDown,
-    handleResizePointerDown,
-    handleGroupResizePointerDown,
-    handleGroupDragPointerDown,
-  } = useDragManager({
+  const { spatialIndexRef, handleElementPointerDown } = useDragManager({
     scene,
     selection,
     editingTextId,
@@ -229,8 +220,7 @@ export default function SceneEditor() {
     return scene.elements.find((element) => element.id === selection.selectedIds[0]) ?? null
   }, [scene.elements, selection.selectedIds])
 
-  const { visibleGuides, visibleSpacingGuides } = useVisibleGuides(
-    guides,
+  const { visibleSpacingGuides } = useVisibleGuides(
     spacingGuides,
     selection.selectedIds,
     guidesSelectedIds,
@@ -319,7 +309,6 @@ export default function SceneEditor() {
     elementsClipboardRef,
     spatialIndexRef,
     setGuidesSelectedIds,
-    setGuides,
     setSpacingGuides,
     setScene,
     markSceneEdited,
@@ -458,19 +447,13 @@ export default function SceneEditor() {
             stageViewportRef={stageViewportRef}
             scene={scene}
             selectedIds={selection.selectedIds}
-            guides={visibleGuides}
             spacingGuides={visibleSpacingGuides}
-            resizeLabel={resizeLabel}
             svgRef={svgRef}
             editingTextId={editingTextId}
-            isGroupDragging={false}
             canvasWidth={canvasSize.width}
             canvasHeight={canvasSize.height}
             resolveSrc={resolveSrc}
             onElementPointerDown={handleElementPointerDown}
-            onResizePointerDown={handleResizePointerDown}
-            onGroupDragPointerDown={handleGroupDragPointerDown}
-            onGroupResizePointerDown={handleGroupResizePointerDown}
             onTextElementDoubleClick={handleTextElementDoubleClick}
             onSceneChange={changeScene}
           />

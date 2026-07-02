@@ -3,28 +3,16 @@ export * from './scene'
 
 // Alignment (spacing + Moveable snappable adapter)
 export {
-  type GuideMode,
-  type GuideContext,
-  type GuideDirection,
-  type GuideType,
-  type GuideLine,
   type ExtensionLine,
   type MeasurementGuide,
-  type ResizeLabel,
-  type CanvasSizeOptions,
   type MoveableGuideline,
   buildMoveableGuidelines,
   computeSpacingGuides,
   computeSpacingGuidesOptimized,
 } from './alignment'
 
-// Transform (bounding-box + display helpers)
-export {
-  type ResizeHandleType,
-  type BoundingBox,
-  computeBoundingBox,
-  formatDimension,
-} from './transform'
+// Transform (bounding-box)
+export { type BoundingBox, computeBoundingBox } from './transform'
 
 // SVG serialization (scene → svg markup)
 export {
