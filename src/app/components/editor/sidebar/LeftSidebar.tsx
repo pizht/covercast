@@ -6,7 +6,7 @@ import { SourcesPanel } from '../../panels/SourcesPanel'
 import { TemplatePanel } from '../../panels/TemplatePanel'
 import { CanvasSizeSelector } from '../../controls/CanvasSizeSelector'
 import { SidebarSection } from './SidebarSection'
-import type { Scene, SelectionState } from '@/domain'
+import type { Scene } from '@/domain'
 import type { CustomSceneTemplate, SceneSlotInfo } from '../../../hooks/useTemplateManager'
 import type { CanvasSize, CanvasSizePreset } from '../../../hooks/useCanvasSize'
 import { ColorPicker, Slider } from '@/shared/components'
@@ -64,8 +64,8 @@ type LeftSidebarProps = {
   deleteCustomTemplate: (templateId: string) => void
 
   // Layers
-  selection: SelectionState
-  setSelection: React.Dispatch<React.SetStateAction<SelectionState>>
+  selection: { selectedIds: string[] }
+  setSelection: React.Dispatch<React.SetStateAction<{ selectedIds: string[] }>>
   toggleElementHidden: (elementId: string) => void
   toggleElementLocked: (elementId: string) => void
   moveElementLayer: (elementId: string, direction: 'forward' | 'backward') => void

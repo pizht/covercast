@@ -1,6 +1,6 @@
 'use client'
 
-import { type SceneElement, isSelected, selectSingle, type SelectionState } from '@/domain'
+import { type SceneElement } from '@/domain'
 import { cn } from '@/shared/lib'
 import { SidebarSection } from '../editor/sidebar/SidebarSection'
 import styles from './LayerPanel.module.css'
@@ -48,10 +48,10 @@ export function LayerPanel({
   onMoveLayer,
 }: {
   elements: SceneElement[]
-  selection: SelectionState
+  selection: { selectedIds: string[] }
   collapsed: boolean
   onToggle: () => void
-  onSelect: (selection: SelectionState) => void
+  onSelect: React.Dispatch<React.SetStateAction<{ selectedIds: string[] }>>
   onToggleHidden: (elementId: string) => void
   onToggleLocked: (elementId: string) => void
   onMoveLayer: (elementId: string, direction: 'forward' | 'backward') => void
@@ -67,7 +67,7 @@ export function LayerPanel({
     >
       <div className={styles.layerList}>
         {visualLayers.map(({ element, index }) => {
-          const isActive = isSelected(selection, element.id)
+          const isActive = selection.selectedIds.includes(element.id)
           const isTop = index === elements.length - 1
           const isBottom = index === 0
 
@@ -84,7 +84,7 @@ export function LayerPanel({
               <button
                 type="button"
                 className={styles.layerMain}
-                onClick={() => onSelect(selectSingle(selection, element.id))}
+                onClick={() => onSelect({ selectedIds: [element.id] })}
               >
                 <span className={styles.layerType}>{elementTypeGlyph(element)}</span>
                 <span className={styles.layerName}>{element.name}</span>

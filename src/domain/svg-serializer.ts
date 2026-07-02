@@ -73,20 +73,6 @@ export function textX(element: TextElement): number {
 }
 
 /**
- * Returns the bounding rect of an arbitrary scene element.
- * @param element - The element to measure.
- * @returns An object with `x`, `y`, `width`, and `height` properties.
- */
-export function elementBounds(element: SceneElement) {
-  return {
-    x: element.x,
-    y: element.y,
-    width: element.width,
-    height: element.height,
-  }
-}
-
-/**
  * Serializes a `Scene` into a complete SVG markup string.
  * Hidden elements are filtered out before rendering.
  * @param scene - The scene to serialize.

@@ -4,9 +4,6 @@ import {
   DEFAULT_CANVAS_HEIGHT,
   type Scene,
   type SceneElement,
-  selectSingle,
-  selectMultiple,
-  type SelectionState,
 } from '@/domain'
 import { clamp } from '@/shared/lib'
 
@@ -58,7 +55,7 @@ type UseClipboardOptions = {
   sceneElementsRef: React.MutableRefObject<SceneElement[]>
   selectedIds: string[]
   changeScene: (updater: (currentScene: Scene) => Scene, description?: string) => void
-  setSelection: (updater: (prev: SelectionState) => SelectionState) => void
+  setSelection: (updater: (prev: { selectedIds: string[] }) => { selectedIds: string[] }) => void
   markSceneEdited: () => void
   setStatus: (status: string) => void
   canvasWidth?: number
@@ -146,7 +143,7 @@ export function useClipboard(options: UseClipboardOptions) {
         }),
         `粘贴元素「${pastedElement.name}」`,
       )
-      setSelection((prev) => selectSingle(prev, pastedElement.id))
+      setSelection((prev) => ({ selectedIds: [pastedElement.id] }))
       markSceneEdited()
       setStatus(`已粘贴「${pastedElement.name}」`)
     } else if (sourceElements && sourceElements.length > 0) {
@@ -177,7 +174,7 @@ export function useClipboard(options: UseClipboardOptions) {
         }),
         `粘贴 ${pastedElements.length} 个元素`,
       )
-      setSelection((prev) => selectMultiple(prev, pastedIds, false))
+      setSelection(() => ({ selectedIds: pastedIds }))
       markSceneEdited()
       setStatus(`已粘贴 ${pastedElements.length} 个组件`)
     }

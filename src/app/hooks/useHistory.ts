@@ -1,5 +1,5 @@
 import { useState, useCallback } from 'react'
-import { cloneScene, type Scene, type SelectionState } from '@/domain'
+import { cloneScene, type Scene } from '@/domain'
 
 const MAX_HISTORY_SIZE = 50
 
@@ -19,7 +19,7 @@ type UseHistoryOptions = {
   scene: Scene
   selectedIds: string[]
   setScene: (scene: Scene) => void
-  setSelection: (updater: (prev: SelectionState) => SelectionState) => void
+  setSelection: (updater: (prev: { selectedIds: string[] }) => { selectedIds: string[] }) => void
   setStatus: (status: string) => void
 }
 
@@ -67,7 +67,7 @@ export function useHistory(options: UseHistoryOptions) {
     }))
 
     setScene(previous.scene)
-    setSelection((prev) => ({ ...prev, selectedIds: previous.selectedIds }))
+    setSelection(() => ({ selectedIds: previous.selectedIds }))
     setStatus(`已撤销：${previous.description}`)
   }, [history.past, scene, selectedIds, setScene, setSelection, setStatus])
 
@@ -93,7 +93,7 @@ export function useHistory(options: UseHistoryOptions) {
     }))
 
     setScene(next.scene)
-    setSelection((prev) => ({ ...prev, selectedIds: next.selectedIds }))
+    setSelection(() => ({ selectedIds: next.selectedIds }))
     setStatus(`已重做：${next.description}`)
   }, [history.future, scene, selectedIds, setScene, setSelection, setStatus])
 

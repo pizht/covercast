@@ -5,9 +5,6 @@ import {
   cloneScene,
   BUILT_IN_TEMPLATES,
   type Scene,
-  selectSingle,
-  createSelectionState,
-  type SelectionState,
 } from '@/domain'
 import type { CanvasSizePreset, CanvasSize } from './useCanvasSize'
 import type { CustomSceneTemplate } from './useTemplateManager'
@@ -30,7 +27,11 @@ const DEFAULT_CONFIG: BlankCoverConfig = {
 
 type UseCreateBlankCoverOptions = {
   setScene: (scene: Scene) => void
-  setSelection: (value: SelectionState | ((prev: SelectionState) => SelectionState)) => void
+  setSelection: (
+    value:
+      | { selectedIds: string[] }
+      | ((prev: { selectedIds: string[] }) => { selectedIds: string[] }),
+  ) => void
   setCanvasSize: (size: CanvasSize) => void
   setActiveTemplateId: (id: string) => void
   setStatus: (status: string) => void
@@ -97,9 +98,9 @@ export function useCreateBlankCover(options: UseCreateBlankCoverOptions) {
 
     // Clear selection or select first element if exists
     if (newScene.elements.length > 0 && newScene.elements[0].id) {
-      setSelection(selectSingle(createSelectionState(), newScene.elements[0].id))
+      setSelection({ selectedIds: [newScene.elements[0].id] })
     } else {
-      setSelection(createSelectionState())
+      setSelection({ selectedIds: [] })
     }
 
     // Save as custom template

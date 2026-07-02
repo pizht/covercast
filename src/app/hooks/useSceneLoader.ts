@@ -1,5 +1,5 @@
 import { useEffect } from 'react'
-import { BUILT_IN_TEMPLATES, type Scene, selectSingle, type SelectionState } from '@/domain'
+import { BUILT_IN_TEMPLATES, type Scene } from '@/domain'
 
 export function useSceneLoader({
   setScene,
@@ -10,7 +10,7 @@ export function useSceneLoader({
   setScene: React.Dispatch<React.SetStateAction<Scene>>
   setStatus: (status: string) => void
   setActiveTemplateId: (id: string) => void
-  setSelection: React.Dispatch<React.SetStateAction<SelectionState>>
+  setSelection: React.Dispatch<React.SetStateAction<{ selectedIds: string[] }>>
 }) {
   useEffect(() => {
     let active = true
@@ -32,7 +32,7 @@ export function useSceneLoader({
             )?.id ?? ''
           setActiveTemplateId(matchingTemplateId)
           if (nextScene.elements[0]?.id) {
-            setSelection((prev) => selectSingle(prev, nextScene.elements[0].id))
+            setSelection({ selectedIds: [nextScene.elements[0].id] })
           }
         }
       } catch {

@@ -1,16 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import {
-  cloneScene,
-  createDefaultScene,
-  type Scene,
-  type SceneElement,
-  createSelectionState,
-  selectSingle,
-  type SelectionState,
-  type HitTestStrategy,
-} from '@/domain'
+import { cloneScene, createDefaultScene, type Scene, type SceneElement } from '@/domain'
 import editorStyles from './editor/editor.module.css'
 import { useScrollVisibility } from '../lib/use-scroll-visibility'
 import { usePanelResize } from '../lib/use-panel-resize'
@@ -21,13 +12,10 @@ import { useCanvasZoom } from '../hooks/useCanvasZoom'
 import { useCanvasSize } from '../hooks/useCanvasSize'
 import { useTemplateManager } from '../hooks/useTemplateManager'
 import { useSlotManager } from '../hooks/useSlotManager'
-import { useDragManager } from '../hooks/useDragManager'
-import { useMarqueeSelection } from '../hooks/useMarqueeSelection'
 import { useExportScene, type ExportFormat, EXPORT_FORMAT_OPTIONS } from '../hooks/useExportScene'
 import { useSceneActions } from '../hooks/useSceneActions'
 import { useAssetManager } from '../hooks/useAssetManager'
 import { useSceneLoader } from '../hooks/useSceneLoader'
-import { useVisibleGuides } from '../hooks/useVisibleGuides'
 import { useLocalFonts } from '../hooks/useLocalFonts'
 import { useLocalAssets } from '../hooks/useLocalAssets'
 import { useCreateBlankCover } from '../hooks/useCreateBlankCover'
@@ -43,12 +31,10 @@ type SidebarSectionId = 'scene' | 'sources' | 'templates' | 'layers'
 
 export default function SceneEditor() {
   const [scene, setScene] = useState<Scene>(() => createDefaultScene())
-  const [selection, setSelection] = useState<SelectionState>(() => createSelectionState())
-  const [hitTestStrategy] = useState<HitTestStrategy>('intersection')
+  const [selection, setSelection] = useState<{ selectedIds: string[] }>({ selectedIds: [] })
   const [status, setStatus] = useState('正在读取本地场景...')
   const [appOrigin, setAppOrigin] = useState('')
   const [exportFormat, setExportFormat] = useState<ExportFormat>('png')
-  const [guidesSelectedIds, setGuidesSelectedIds] = useState<string[]>([])
   const svgRef = useRef<SVGSVGElement>(null)
   const sceneElementsRef = useRef<SceneElement[]>(scene.elements)
   const selectedElementRef = useRef<SceneElement | null>(null)
@@ -200,54 +186,12 @@ export default function SceneEditor() {
     customTemplatesRef.current = customTemplates
   }, [customTemplates, customTemplatesRef])
 
-  const { marquee, handleCanvasPointerDown } = useMarqueeSelection({
-    svgRef,
-    sceneElementsRef,
-    hitTestStrategy,
-    editingTextId,
-    setSelection,
-    setEditingTextId,
-  })
-
-  const {
-    drag,
-    guides,
-    spacingGuides,
-    resizeLabel,
-    spatialIndexRef,
-    setGuides,
-    setSpacingGuides,
-    handleElementPointerDown,
-    handleResizePointerDown,
-    handleGroupResizePointerDown,
-    handleGroupDragPointerDown,
-  } = useDragManager({
-    scene,
-    selection,
-    editingTextId,
-    svgRef,
-    saveHistory,
-    markSceneEdited,
-    setScene,
-    setSelection,
-    setEditingTextId,
-    canvasWidth: canvasSize.width,
-    canvasHeight: canvasSize.height,
-  })
-
   const selectedElement = useMemo(() => {
     if (selection.selectedIds.length !== 1) {
       return null
     }
     return scene.elements.find((element) => element.id === selection.selectedIds[0]) ?? null
   }, [scene.elements, selection.selectedIds])
-
-  const { visibleGuides, visibleSpacingGuides } = useVisibleGuides(
-    guides,
-    spacingGuides,
-    selection.selectedIds,
-    guidesSelectedIds,
-  )
 
   useEffect(() => {
     sceneElementsRef.current = scene.elements
@@ -320,20 +264,15 @@ export default function SceneEditor() {
 
   useEditorShortcuts({
     scene,
-    selection,
+    selectedIds: selection.selectedIds,
     editingTextId,
     undo,
     redo,
     copySelectedElements,
     pasteCopiedElements,
     deleteSelected,
-    selectedElementRef,
     elementClipboardRef,
     elementsClipboardRef,
-    spatialIndexRef,
-    setGuidesSelectedIds,
-    setGuides,
-    setSpacingGuides,
     setScene,
     markSceneEdited,
   })
@@ -360,7 +299,7 @@ export default function SceneEditor() {
       return
     }
 
-    setSelection(selectSingle(selection, elementId))
+    setSelection({ selectedIds: [elementId] })
     setEditingTextId(elementId)
   }
 
@@ -470,23 +409,11 @@ export default function SceneEditor() {
             handleStageWheel={handleStageWheel}
             stageViewportRef={stageViewportRef}
             scene={scene}
-            selectedIds={selection.selectedIds}
-            guides={visibleGuides}
-            spacingGuides={visibleSpacingGuides}
-            resizeLabel={resizeLabel}
-            svgRef={svgRef}
-            marquee={marquee}
-            hitTestStrategy={hitTestStrategy}
             editingTextId={editingTextId}
-            isGroupDragging={drag?.mode === 'group-move'}
+            svgRef={svgRef}
             canvasWidth={canvasSize.width}
             canvasHeight={canvasSize.height}
             resolveSrc={resolveSrc}
-            onCanvasPointerDown={handleCanvasPointerDown}
-            onElementPointerDown={handleElementPointerDown}
-            onResizePointerDown={handleResizePointerDown}
-            onGroupDragPointerDown={handleGroupDragPointerDown}
-            onGroupResizePointerDown={handleGroupResizePointerDown}
             onTextElementDoubleClick={handleTextElementDoubleClick}
           />
 

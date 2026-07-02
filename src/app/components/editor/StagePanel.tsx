@@ -1,16 +1,8 @@
 'use client'
 
-import type { Ref, WheelEvent as ReactWheelEvent, PointerEvent } from 'react'
+import type { Ref, WheelEvent as ReactWheelEvent } from 'react'
 import SceneCanvas from '../SceneCanvas'
-import type {
-  Scene,
-  GuideLine,
-  MeasurementGuide,
-  ResizeLabel,
-  HitTestStrategy,
-  MarqueeState,
-  ResizeHandleType,
-} from '@/domain'
+import type { Scene } from '@/domain'
 import { Slider } from '@/shared/components/ui'
 import styles from './editor.module.css'
 
@@ -35,23 +27,11 @@ type StagePanelProps = {
 
   // SceneCanvas props
   scene: Scene
-  selectedIds: string[]
-  guides?: GuideLine[]
-  spacingGuides?: MeasurementGuide[]
-  resizeLabel?: ResizeLabel | null
-  svgRef?: Ref<SVGSVGElement>
-  marquee?: MarqueeState
-  hitTestStrategy?: HitTestStrategy
   editingTextId?: string | null
-  isGroupDragging?: boolean
+  svgRef?: Ref<SVGSVGElement>
   canvasWidth?: number
   canvasHeight?: number
   resolveSrc?: (src: string) => string
-  onCanvasPointerDown?: (event: PointerEvent<SVGSVGElement>) => void
-  onElementPointerDown?: (elementId: string, event: PointerEvent<SVGGElement>) => void
-  onResizePointerDown?: (elementId: string, event: PointerEvent<SVGRectElement>) => void
-  onGroupDragPointerDown?: (event: PointerEvent<SVGRectElement>) => void
-  onGroupResizePointerDown?: (handle: ResizeHandleType, event: PointerEvent<SVGRectElement>) => void
   onTextElementDoubleClick?: (elementId: string) => void
 }
 
@@ -71,23 +51,11 @@ export function StagePanel({
   handleStageWheel,
   stageViewportRef,
   scene,
-  selectedIds,
-  guides,
-  spacingGuides,
-  resizeLabel,
-  svgRef,
-  marquee,
-  hitTestStrategy,
   editingTextId,
-  isGroupDragging,
+  svgRef,
   canvasWidth,
   canvasHeight,
   resolveSrc,
-  onCanvasPointerDown,
-  onElementPointerDown,
-  onResizePointerDown,
-  onGroupDragPointerDown,
-  onGroupResizePointerDown,
   onTextElementDoubleClick,
 }: StagePanelProps) {
   return (
@@ -95,7 +63,6 @@ export function StagePanel({
       <div className={styles.stageHeader}>
         <span className={styles.stageStatus}>{status}</span>
         <div className={styles.stageHeaderTools}>
-          <span>拖拽移动，右下角黄点缩放</span>
           <div
             className={styles.canvasZoomControls}
             aria-label="画布缩放"
@@ -157,23 +124,11 @@ export function StagePanel({
               style={{ aspectRatio: `${canvasWidth} / ${canvasHeight}` }}
               idPrefix="editor"
               interactive
-              selectedIds={selectedIds}
-              guides={guides}
-              spacingGuides={spacingGuides}
-              resizeLabel={resizeLabel}
-              svgRef={svgRef}
-              marquee={marquee}
-              hitTestStrategy={hitTestStrategy}
               editingTextId={editingTextId}
-              isGroupDragging={isGroupDragging}
+              svgRef={svgRef}
               canvasWidth={canvasWidth}
               canvasHeight={canvasHeight}
               resolveSrc={resolveSrc}
-              onCanvasPointerDown={onCanvasPointerDown}
-              onElementPointerDown={onElementPointerDown}
-              onResizePointerDown={onResizePointerDown}
-              onGroupDragPointerDown={onGroupDragPointerDown}
-              onGroupResizePointerDown={onGroupResizePointerDown}
               onTextElementDoubleClick={onTextElementDoubleClick}
             />
           </div>

@@ -1,4 +1,3 @@
-import { type PointerEvent } from 'react'
 import type { SceneElement } from '@/domain'
 import { ShapeElementView } from './ShapeElementView'
 import { TextElementView } from './TextElementView'
@@ -9,7 +8,6 @@ export function ElementView({
   idPrefix,
   interactive,
   editingTextId,
-  onPointerDown,
   onDoubleClick,
   resolveSrc,
 }: {
@@ -17,22 +15,12 @@ export function ElementView({
   idPrefix: string
   interactive: boolean
   editingTextId?: string | null
-  onPointerDown?: (elementId: string, event: PointerEvent<SVGGElement>) => void
   onDoubleClick?: (elementId: string) => void
   resolveSrc?: (src: string) => string
 }) {
   return (
     <g
-      className={interactive ? (element.locked ? 'cursor-default' : 'cursor-move') : undefined}
       data-element-id={element.id}
-      onPointerDown={(event) => {
-        if (!interactive) {
-          return
-        }
-
-        event.stopPropagation()
-        onPointerDown?.(element.id, event)
-      }}
       onDoubleClick={() => {
         if (!interactive || element.type !== 'text') {
           return

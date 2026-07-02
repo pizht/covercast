@@ -5,8 +5,6 @@ import {
   type ImageElement,
   type Scene,
   type SceneElement,
-  selectSingle,
-  type SelectionState,
 } from '@/domain'
 import {
   buildLocalAssetSrc,
@@ -29,8 +27,8 @@ export function useAssetManager({
   selectedElement: SceneElement | null | undefined
   patchElement: (elementId: string, patch: Partial<SceneElement>) => void
   changeScene: (updater: (currentScene: Scene) => Scene, description?: string) => void
-  selection: SelectionState
-  setSelection: React.Dispatch<React.SetStateAction<SelectionState>>
+  selection: { selectedIds: string[] }
+  setSelection: React.Dispatch<React.SetStateAction<{ selectedIds: string[] }>>
 }) {
   async function uploadAsset(file: File, mode: 'add' | 'replace') {
     if (!isSupportedImageType(file)) {
@@ -75,7 +73,7 @@ export function useAssetManager({
         ...currentScene,
         elements: [...currentScene.elements, element],
       }))
-      setSelection(selectSingle(selection, element.id))
+      setSelection({ selectedIds: [element.id] })
       setStatus('素材已添加到当前画布')
     } catch {
       setStatus('素材保存失败，浏览器存储空间可能不足')

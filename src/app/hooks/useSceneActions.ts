@@ -4,9 +4,6 @@ import {
   createTextElement,
   type Scene,
   type SceneElement,
-  clearSelection,
-  selectSingle,
-  type SelectionState,
 } from '@/domain'
 
 export function useSceneActions({
@@ -16,9 +13,9 @@ export function useSceneActions({
   setSelection,
 }: {
   scene: Scene
-  selection: SelectionState
+  selection: { selectedIds: string[] }
   changeScene: (updater: (currentScene: Scene) => Scene, description?: string) => void
-  setSelection: React.Dispatch<React.SetStateAction<SelectionState>>
+  setSelection: React.Dispatch<React.SetStateAction<{ selectedIds: string[] }>>
 }) {
   function patchElement(elementId: string, patch: Partial<SceneElement>) {
     changeScene(
@@ -81,7 +78,7 @@ export function useSceneActions({
       ;[elements[currentIndex], elements[nextIndex]] = [elements[nextIndex], elements[currentIndex]]
       return { ...currentScene, elements }
     }, `调整图层顺序`)
-    setSelection(selectSingle(selection, elementId))
+    setSelection({ selectedIds: [elementId] })
   }
 
   function addTextElement() {
@@ -93,7 +90,7 @@ export function useSceneActions({
       }),
       `添加文字元素`,
     )
-    setSelection(selectSingle(selection, element.id))
+    setSelection({ selectedIds: [element.id] })
   }
 
   function addRectElement() {
@@ -105,7 +102,7 @@ export function useSceneActions({
       }),
       `添加矩形元素`,
     )
-    setSelection(selectSingle(selection, element.id))
+    setSelection({ selectedIds: [element.id] })
   }
 
   function addEllipseElement() {
@@ -117,7 +114,7 @@ export function useSceneActions({
       }),
       `添加椭圆元素`,
     )
-    setSelection(selectSingle(selection, element.id))
+    setSelection({ selectedIds: [element.id] })
   }
 
   function deleteSelected() {
@@ -135,9 +132,9 @@ export function useSceneActions({
       (element) => !selection.selectedIds.includes(element.id),
     )
     if (remainingElement?.id) {
-      setSelection(selectSingle(selection, remainingElement.id))
+      setSelection({ selectedIds: [remainingElement.id] })
     } else {
-      setSelection(clearSelection(selection))
+      setSelection({ selectedIds: [] })
     }
   }
 

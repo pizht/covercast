@@ -5,8 +5,6 @@ import {
   cloneScene,
   type Scene,
   type SceneElement,
-  selectSingle,
-  type SelectionState,
 } from '@/domain'
 
 const TEMPLATE_EXPORT_FORMAT = 'covercast.template'
@@ -205,9 +203,13 @@ function downloadBlob(blob: Blob, filename: string) {
 
 type UseTemplateManagerOptions = {
   scene: Scene
-  selection: SelectionState
+  selection: { selectedIds: string[] }
   setScene: (scene: Scene) => void
-  setSelection: (value: SelectionState | ((prev: SelectionState) => SelectionState)) => void
+  setSelection: (
+    value:
+      | { selectedIds: string[] }
+      | ((prev: { selectedIds: string[] }) => { selectedIds: string[] }),
+  ) => void
   setStatus: (status: string) => void
   templateSlots: SceneSlotInfo[]
   setActiveSlotId: (slotId: string) => void
@@ -245,7 +247,7 @@ export function useTemplateManager(options: UseTemplateManagerOptions) {
     const nextScene = cloneScene(template.scene)
     setScene(nextScene)
     if (nextScene.elements[0]?.id) {
-      setSelection(selectSingle(selection, nextScene.elements[0].id))
+      setSelection({ selectedIds: [nextScene.elements[0].id] })
     }
     setActiveTemplateId(template.id)
 
@@ -472,7 +474,7 @@ export function useTemplateManager(options: UseTemplateManagerOptions) {
       setCustomTemplates(nextTemplates)
       setScene(cloneScene(importedTemplate.scene))
       if (importedTemplate.scene.elements[0]?.id) {
-        setSelection(selectSingle(selection, importedTemplate.scene.elements[0].id))
+        setSelection({ selectedIds: [importedTemplate.scene.elements[0].id] })
       }
       setActiveTemplateId(importedTemplate.id)
       setActiveSlotId('default')
