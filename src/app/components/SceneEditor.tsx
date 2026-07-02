@@ -9,7 +9,6 @@ import {
   createSelectionState,
   selectSingle,
   type SelectionState,
-  type HitTestStrategy,
 } from '@/domain'
 import editorStyles from './editor/editor.module.css'
 import { useScrollVisibility } from '../lib/use-scroll-visibility'
@@ -22,7 +21,6 @@ import { useCanvasSize } from '../hooks/useCanvasSize'
 import { useTemplateManager } from '../hooks/useTemplateManager'
 import { useSlotManager } from '../hooks/useSlotManager'
 import { useDragManager } from '../hooks/useDragManager'
-import { useMarqueeSelection } from '../hooks/useMarqueeSelection'
 import { useExportScene, type ExportFormat, EXPORT_FORMAT_OPTIONS } from '../hooks/useExportScene'
 import { useSceneActions } from '../hooks/useSceneActions'
 import { useAssetManager } from '../hooks/useAssetManager'
@@ -44,7 +42,6 @@ type SidebarSectionId = 'scene' | 'sources' | 'templates' | 'layers'
 export default function SceneEditor() {
   const [scene, setScene] = useState<Scene>(() => createDefaultScene())
   const [selection, setSelection] = useState<SelectionState>(() => createSelectionState())
-  const [hitTestStrategy] = useState<HitTestStrategy>('intersection')
   const [status, setStatus] = useState('正在读取本地场景...')
   const [appOrigin, setAppOrigin] = useState('')
   const [exportFormat, setExportFormat] = useState<ExportFormat>('png')
@@ -200,17 +197,7 @@ export default function SceneEditor() {
     customTemplatesRef.current = customTemplates
   }, [customTemplates, customTemplatesRef])
 
-  const { marquee, handleCanvasPointerDown } = useMarqueeSelection({
-    svgRef,
-    sceneElementsRef,
-    hitTestStrategy,
-    editingTextId,
-    setSelection,
-    setEditingTextId,
-  })
-
   const {
-    drag,
     guides,
     spacingGuides,
     resizeLabel,
@@ -475,19 +462,17 @@ export default function SceneEditor() {
             spacingGuides={visibleSpacingGuides}
             resizeLabel={resizeLabel}
             svgRef={svgRef}
-            marquee={marquee}
-            hitTestStrategy={hitTestStrategy}
             editingTextId={editingTextId}
-            isGroupDragging={drag?.mode === 'group-move'}
+            isGroupDragging={false}
             canvasWidth={canvasSize.width}
             canvasHeight={canvasSize.height}
             resolveSrc={resolveSrc}
-            onCanvasPointerDown={handleCanvasPointerDown}
             onElementPointerDown={handleElementPointerDown}
             onResizePointerDown={handleResizePointerDown}
             onGroupDragPointerDown={handleGroupDragPointerDown}
             onGroupResizePointerDown={handleGroupResizePointerDown}
             onTextElementDoubleClick={handleTextElementDoubleClick}
+            onSceneChange={changeScene}
           />
 
           <div

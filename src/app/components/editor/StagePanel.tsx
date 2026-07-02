@@ -2,15 +2,8 @@
 
 import type { Ref, WheelEvent as ReactWheelEvent, PointerEvent } from 'react'
 import SceneCanvas from '../SceneCanvas'
-import type {
-  Scene,
-  GuideLine,
-  MeasurementGuide,
-  ResizeLabel,
-  HitTestStrategy,
-  MarqueeState,
-  ResizeHandleType,
-} from '@/domain'
+import MoveableLayer from '../canvas/MoveableLayer'
+import type { Scene, GuideLine, MeasurementGuide, ResizeLabel, ResizeHandleType } from '@/domain'
 import { Slider } from '@/shared/components/ui'
 import styles from './editor.module.css'
 
@@ -40,19 +33,17 @@ type StagePanelProps = {
   spacingGuides?: MeasurementGuide[]
   resizeLabel?: ResizeLabel | null
   svgRef?: Ref<SVGSVGElement>
-  marquee?: MarqueeState
-  hitTestStrategy?: HitTestStrategy
   editingTextId?: string | null
   isGroupDragging?: boolean
   canvasWidth?: number
   canvasHeight?: number
   resolveSrc?: (src: string) => string
-  onCanvasPointerDown?: (event: PointerEvent<SVGSVGElement>) => void
   onElementPointerDown?: (elementId: string, event: PointerEvent<SVGGElement>) => void
   onResizePointerDown?: (elementId: string, event: PointerEvent<SVGRectElement>) => void
   onGroupDragPointerDown?: (event: PointerEvent<SVGRectElement>) => void
   onGroupResizePointerDown?: (handle: ResizeHandleType, event: PointerEvent<SVGRectElement>) => void
   onTextElementDoubleClick?: (elementId: string) => void
+  onSceneChange?: (updater: (scene: Scene) => Scene, description?: string) => void
 }
 
 export function StagePanel({
@@ -76,19 +67,17 @@ export function StagePanel({
   spacingGuides,
   resizeLabel,
   svgRef,
-  marquee,
-  hitTestStrategy,
   editingTextId,
   isGroupDragging,
   canvasWidth,
   canvasHeight,
   resolveSrc,
-  onCanvasPointerDown,
   onElementPointerDown,
   onResizePointerDown,
   onGroupDragPointerDown,
   onGroupResizePointerDown,
   onTextElementDoubleClick,
+  onSceneChange,
 }: StagePanelProps) {
   return (
     <section className={styles.stagePanel} aria-label="Canvas preview">
@@ -149,6 +138,7 @@ export function StagePanel({
             style={{
               width: canvasPreviewWidth,
               aspectRatio: `${canvasWidth} / ${canvasHeight}`,
+              position: 'relative',
             }}
           >
             <SceneCanvas
@@ -162,20 +152,25 @@ export function StagePanel({
               spacingGuides={spacingGuides}
               resizeLabel={resizeLabel}
               svgRef={svgRef}
-              marquee={marquee}
-              hitTestStrategy={hitTestStrategy}
               editingTextId={editingTextId}
               isGroupDragging={isGroupDragging}
               canvasWidth={canvasWidth}
               canvasHeight={canvasHeight}
               resolveSrc={resolveSrc}
-              onCanvasPointerDown={onCanvasPointerDown}
               onElementPointerDown={onElementPointerDown}
               onResizePointerDown={onResizePointerDown}
               onGroupDragPointerDown={onGroupDragPointerDown}
               onGroupResizePointerDown={onGroupResizePointerDown}
               onTextElementDoubleClick={onTextElementDoubleClick}
             />
+            {onSceneChange ? (
+              <MoveableLayer
+                svgRef={svgRef as React.RefObject<SVGSVGElement | null>}
+                scene={scene}
+                selectedIds={selectedIds}
+                changeScene={onSceneChange}
+              />
+            ) : null}
           </div>
         </div>
       </div>

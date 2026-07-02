@@ -2,7 +2,6 @@ import { useEffect } from 'react'
 import {
   type Scene,
   type SceneElement,
-  computeGuidesOptimized,
   computeSpacingGuidesOptimized,
   type GuideLine,
   type MeasurementGuide,
@@ -170,14 +169,12 @@ export function useEditorShortcuts(options: UseEditorShortcutsOptions) {
 
           if (updatedSelectedElements.length > 0) {
             const movedBounds = computeBoundingBox(updatedSelectedElements)
-            const guides = computeGuidesOptimized(movedBounds, spatialIndexRef.current)
             const spacingGuides = computeSpacingGuidesOptimized(
               movedBounds,
               spatialIndexRef.current,
             )
 
             setGuidesSelectedIds(selection.selectedIds)
-            setGuides(guides)
             setSpacingGuides(spacingGuides)
           }
 
@@ -259,14 +256,12 @@ export function useEditorShortcuts(options: UseEditorShortcutsOptions) {
 
           if (updatedSelectedElements.length > 0) {
             const movedBounds = computeBoundingBox(updatedSelectedElements)
-            const guides = computeGuidesOptimized(movedBounds, spatialIndexRef.current)
             const spacingGuides = computeSpacingGuidesOptimized(
               movedBounds,
               spatialIndexRef.current,
             )
 
             setGuidesSelectedIds(selection.selectedIds)
-            setGuides(guides)
             setSpacingGuides(spacingGuides)
           }
 

@@ -1,7 +1,7 @@
 // Scene domain (core)
 export * from './scene'
 
-// Alignment (smart-guide)
+// Alignment (spacing + Moveable snappable adapter)
 export {
   type GuideMode,
   type GuideContext,
@@ -12,62 +12,19 @@ export {
   type MeasurementGuide,
   type ResizeLabel,
   type CanvasSizeOptions,
-  type AxisSnapState,
-  type SnapState,
-  type SnapResult,
-  type AxisResizeSnapState,
-  type ResizeSnapState,
-  type ResizeSnapResult,
-  SNAP_THRESHOLD,
-  SNAP_HYSTERESIS,
-  computeGuides,
-  createSnapState,
-  computeSnap,
+  type MoveableGuideline,
+  buildMoveableGuidelines,
   computeSpacingGuides,
-  createResizeSnapState,
-  computeResizeSnap,
-  computeGuidesOptimized,
-  computeSnapOptimized,
   computeSpacingGuidesOptimized,
-  computeResizeSnapOptimized,
 } from './alignment'
 
-// Transform (group-drag)
+// Transform (bounding-box + display helpers)
 export {
-  type GroupDragState,
   type ResizeHandleType,
-  type GroupResizeState,
   type BoundingBox,
-  type ScaleMatrix,
-  createGroupDragState,
-  createGroupResizeState,
   computeBoundingBox,
-  computeScaleMatrix,
-  applyScaleToElement,
-  applyGroupResize,
-  computeNewBoundsFromHandle,
-  applyGroupDragDelta,
-  clampGroupPosition,
   formatDimension,
 } from './transform'
-
-// Marquee (selection-box + hit-test)
-export {
-  type MarqueeState,
-  type HitTestStrategy,
-  createMarqueeState,
-  startMarquee,
-  updateMarquee,
-  clearMarquee,
-  getMarqueeRect,
-  isMarqueeActive,
-  hasMarqueeSize,
-  getElementBounds,
-  intersectsRect,
-  containsRect,
-  hitTestElement,
-  hitTestElements,
-} from './marquee'
 
 // SVG serialization (scene → svg markup)
 export {
