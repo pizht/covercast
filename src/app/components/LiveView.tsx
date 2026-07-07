@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { createDefaultScene, type Scene } from "../lib/scene";
-import SceneCanvas from "./SceneCanvas";
+import HtmlSceneCanvas from "./HtmlSceneCanvas";
 
 type LiveViewProps = {
   templateId?: string;
@@ -50,7 +50,7 @@ export default function LiveView({ templateId, slotId }: LiveViewProps) {
     <>
       <style>{`html, body { background: transparent !important; }`}</style>
       <main className="live-shell">
-        <SceneCanvas scene={scene} className="live-canvas" idPrefix="live" />
+        <HtmlSceneCanvas scene={scene} className="live-canvas" />
       </main>
     </>
   );

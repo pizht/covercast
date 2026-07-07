@@ -35,16 +35,8 @@ import {
   type TextAlign,
   type TextElement,
 } from "../lib/scene";
-import { sceneToSvgMarkup } from "../lib/scene-svg";
-import SceneCanvas from "./SceneCanvas";
-
-type DragState = {
-  id: string;
-  mode: "move" | "resize";
-  startX: number;
-  startY: number;
-  element: SceneElement;
-};
+import InteractiveSceneCanvas from "./InteractiveSceneCanvas";
+import { exportSceneAsImage } from "../lib/scene-export";
 
 type CustomSceneTemplate = {
   id: string;
@@ -145,8 +137,6 @@ export default function SceneEditor() {
   const [exportFormat, setExportFormat] = useState<ExportFormat>("png");
   const [canvasZoom, setCanvasZoom] = useState(1);
   const [canvasFitWidth, setCanvasFitWidth] = useState(CANVAS_PREVIEW_MAX_WIDTH);
-  const [drag, setDrag] = useState<DragState | null>(null);
-  const svgRef = useRef<SVGSVGElement>(null);
   const stageViewportRef = useRef<HTMLDivElement>(null);
   const elementClipboardRef = useRef<SceneElement | null>(null);
   const pasteOffsetRef = useRef(1);
@@ -438,76 +428,18 @@ export default function SceneEditor() {
     setCanvasZoom((value) => clampZoom(value + direction * CANVAS_ZOOM_STEP));
   }
 
-  useEffect(() => {
-    if (!drag) {
-      return;
-    }
-
-    const activeDrag = drag;
-
-    function handlePointerMove(event: PointerEvent) {
-      const svg = svgRef.current;
-      if (!svg) {
-        return;
-      }
-
-      const point = getSvgPoint(svg, event.clientX, event.clientY);
-      const dx = point.x - activeDrag.startX;
-      const dy = point.y - activeDrag.startY;
-
+  const handleElementUpdate = useCallback(
+    (id: string, updates: Partial<SceneElement>) => {
       setScene((currentScene) => ({
         ...currentScene,
-        elements: currentScene.elements.map((element) => {
-          if (element.id !== activeDrag.id) {
-            return element;
-          }
-
-          if (activeDrag.mode === "move") {
-            return {
-              ...element,
-              x: clamp(
-                activeDrag.element.x + dx,
-                -activeDrag.element.width + 24,
-                CANVAS_WIDTH - 24,
-              ),
-              y: clamp(
-                activeDrag.element.y + dy,
-                -activeDrag.element.height + 24,
-                CANVAS_HEIGHT - 24,
-              ),
-            } as SceneElement;
-          }
-
-          return {
-            ...element,
-            width: clamp(
-              activeDrag.element.width + dx,
-              minimumWidth(activeDrag.element),
-              CANVAS_WIDTH - activeDrag.element.x,
-            ),
-            height: clamp(
-              activeDrag.element.height + dy,
-              minimumHeight(activeDrag.element),
-              CANVAS_HEIGHT - activeDrag.element.y,
-            ),
-          } as SceneElement;
-        }),
+        elements: currentScene.elements.map((element) =>
+          element.id === id ? ({ ...element, ...updates } as SceneElement) : element
+        ),
       }));
       markSceneEdited();
-    }
-
-    function handlePointerUp() {
-      setDrag(null);
-    }
-
-    window.addEventListener("pointermove", handlePointerMove);
-    window.addEventListener("pointerup", handlePointerUp, { once: true });
-
-    return () => {
-      window.removeEventListener("pointermove", handlePointerMove);
-      window.removeEventListener("pointerup", handlePointerUp);
-    };
-  }, [drag, markSceneEdited]);
+    },
+    [markSceneEdited]
+  );
 
   const copySelectedElement = useCallback(() => {
     const element = selectedElementRef.current;
@@ -638,56 +570,6 @@ export default function SceneEditor() {
       return { ...currentScene, elements };
     });
     setSelectedId(elementId);
-  }
-
-  function handleElementPointerDown(
-    elementId: string,
-    event: ReactPointerEvent<SVGGElement>,
-  ) {
-    const svg = svgRef.current;
-    const element = scene.elements.find((item) => item.id === elementId);
-    if (!svg || !element) {
-      return;
-    }
-
-    setSelectedId(elementId);
-    if (element.locked) {
-      return;
-    }
-
-    const point = getSvgPoint(svg, event.clientX, event.clientY);
-    setDrag({
-      id: elementId,
-      mode: "move",
-      startX: point.x,
-      startY: point.y,
-      element: { ...element },
-    });
-  }
-
-  function handleResizePointerDown(
-    elementId: string,
-    event: ReactPointerEvent<SVGRectElement>,
-  ) {
-    const svg = svgRef.current;
-    const element = scene.elements.find((item) => item.id === elementId);
-    if (!svg || !element) {
-      return;
-    }
-
-    setSelectedId(elementId);
-    if (element.locked) {
-      return;
-    }
-
-    const point = getSvgPoint(svg, event.clientX, event.clientY);
-    setDrag({
-      id: elementId,
-      mode: "resize",
-      startX: point.x,
-      startY: point.y,
-      element: { ...element },
-    });
   }
 
   function applyTemplate(template: { id: string; name: string; scene: Scene }) {
@@ -950,19 +832,21 @@ export default function SceneEditor() {
         return;
       }
 
-      const exportScene = await inlineSceneAssets(scene);
-      const svgMarkup = sceneToSvgMarkup(exportScene);
+      const inlinedScene = await inlineSceneAssets(scene);
       const filename = `covercast-${new Date().toISOString().slice(0, 10)}.${formatOption.extension}`;
 
       if (format === "svg") {
-        downloadBlob(new Blob([svgMarkup], { type: formatOption.mimeType }), filename);
+        const { renderSceneToCanvas } = await import("../lib/scene-export");
+        const canvas = await renderSceneToCanvas(inlinedScene);
+        const dataUrl = canvas.toDataURL("image/png");
+        const svgContent = `<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="${CANVAS_WIDTH}" height="${CANVAS_HEIGHT}" viewBox="0 0 ${CANVAS_WIDTH} ${CANVAS_HEIGHT}">
+  <image width="${CANVAS_WIDTH}" height="${CANVAS_HEIGHT}" xlink:href="${dataUrl}"/>
+</svg>`;
+        const svgBlob = new Blob([svgContent], { type: "image/svg+xml;charset=utf-8" });
+        downloadBlob(svgBlob, filename);
       } else {
-        const canvas = await renderSvgToCanvas(svgMarkup, format === "jpeg" ? "#ffffff" : null);
-        const blob = await canvasToBlob(
-          canvas,
-          formatOption.mimeType,
-          format === "jpeg" ? 0.92 : undefined,
-        );
+        const blob = await exportSceneAsImage(inlinedScene, format === "jpeg" ? "jpeg" : "png");
         downloadBlob(blob, filename);
       }
 
@@ -1426,16 +1310,12 @@ export default function SceneEditor() {
                 className="scene-preview-frame"
                 style={{ width: canvasPreviewWidth }}
               >
-                <SceneCanvas
+                <InteractiveSceneCanvas
                   scene={scene}
-                  className="scene-preview"
-                  idPrefix="editor"
-                  interactive
                   selectedId={selectedId}
-                  svgRef={svgRef}
-                  onCanvasPointerDown={() => setSelectedId("")}
-                  onElementPointerDown={handleElementPointerDown}
-                  onResizePointerDown={handleResizePointerDown}
+                  onSelect={setSelectedId}
+                  onUpdate={handleElementUpdate}
+                  zoom={canvasZoom}
                 />
               </div>
             </div>
@@ -2465,20 +2345,6 @@ function downloadBlob(blob: Blob, filename: string) {
   download.click();
   download.remove();
   window.setTimeout(() => URL.revokeObjectURL(objectUrl), 0);
-}
-
-function getSvgPoint(svg: SVGSVGElement, clientX: number, clientY: number) {
-  const point = svg.createSVGPoint();
-  point.x = clientX;
-  point.y = clientY;
-  const matrix = svg.getScreenCTM();
-
-  if (!matrix) {
-    return { x: 0, y: 0 };
-  }
-
-  const nextPoint = point.matrixTransform(matrix.inverse());
-  return { x: nextPoint.x, y: nextPoint.y };
 }
 
 function minimumWidth(element: SceneElement) {
