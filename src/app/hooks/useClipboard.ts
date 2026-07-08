@@ -94,6 +94,8 @@ export function useClipboard(options: UseClipboardOptions) {
     const elements = sceneElementsRef.current
     const selectedElements = elements.filter((el) => selectedIds.includes(el.id))
 
+    // Note: selectedIds is already an array passed from caller (from SceneEditor's selectedIdsArray)
+
     if (selectedElements.length === 0) {
       setStatus('未找到选中的组件')
       return

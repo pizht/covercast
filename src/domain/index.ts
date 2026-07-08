@@ -92,8 +92,13 @@ export {
   getSelectedCount,
   hasSelection,
   getFirstSelectedId,
+  getSelectedIds,
   handleElementClick,
   selectMultiple,
+  makeNextSelectedIds,
+  filterSelectedElements,
+  filterNonSelectedElements,
+  someElementSelected,
 } from './selection'
 
 // Spatial Index

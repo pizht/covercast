@@ -28,6 +28,8 @@ import {
   buildSpatialIndex,
   handleElementClick,
   isSelected,
+  getSelectedCount,
+  filterSelectedElements,
   selectSingle,
   type SelectionState,
   computeBoundingBox,
@@ -444,9 +446,9 @@ export function useDragManager({
 
       const point = getSvgPoint(svg, event.clientX, event.clientY)
 
-      if (wasSelected && selection.selectedIds.length > 1 && !isShiftPressed) {
-        const selectedElements = scene.elements.filter(
-          (el) => selection.selectedIds.includes(el.id) && !el.locked,
+      if (wasSelected && getSelectedCount(selection) > 1 && !isShiftPressed) {
+        const selectedElements = filterSelectedElements(scene.elements, selection).filter(
+          (el) => !el.locked,
         )
         if (selectedElements.length > 0) {
           const otherElements = scene.elements.filter(
@@ -520,8 +522,8 @@ export function useDragManager({
         return
       }
 
-      const selectedElements = scene.elements.filter(
-        (el) => selection.selectedIds.includes(el.id) && !el.locked,
+      const selectedElements = filterSelectedElements(scene.elements, selection).filter(
+        (el) => !el.locked,
       )
       if (selectedElements.length === 0) {
         return
@@ -546,8 +548,8 @@ export function useDragManager({
         return
       }
 
-      const selectedElements = scene.elements.filter(
-        (el) => selection.selectedIds.includes(el.id) && !el.locked,
+      const selectedElements = filterSelectedElements(scene.elements, selection).filter(
+        (el) => !el.locked,
       )
       if (selectedElements.length === 0) {
         return

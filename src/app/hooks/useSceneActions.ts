@@ -6,6 +6,8 @@ import {
   type SceneElement,
   clearSelection,
   selectSingle,
+  hasSelection,
+  filterNonSelectedElements,
   type SelectionState,
 } from '@/domain'
 
@@ -121,19 +123,15 @@ export function useSceneActions({
   }
 
   function deleteSelected() {
-    if (selection.selectedIds.length === 0) {
+    if (!hasSelection(selection)) {
       return
     }
 
     changeScene((currentScene) => {
-      const elements = currentScene.elements.filter(
-        (element) => !selection.selectedIds.includes(element.id),
-      )
+      const elements = filterNonSelectedElements(currentScene.elements, selection)
       return { ...currentScene, elements }
     }, `删除元素`)
-    const remainingElement = scene.elements.find(
-      (element) => !selection.selectedIds.includes(element.id),
-    )
+    const remainingElement = filterNonSelectedElements(scene.elements, selection)[0]
     if (remainingElement?.id) {
       setSelection(selectSingle(selection, remainingElement.id))
     } else {

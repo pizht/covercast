@@ -1,14 +1,17 @@
 /**
  * @file Element selection state and operations.
  *
- * Provides a small immutable reducer-style API over a list of selected
- * element ids: single-select, toggle, multi-select, clear, and read-only
- * queries (count, has, first). All operations return new state objects
+ * Inspired by Excalidraw's selection architecture, using Record<string, true>
+ * for O(1) lookup performance. All operations return new state objects
  * rather than mutating in place.
  */
 
+/**
+ * Selection state using a map for efficient lookups.
+ * Mirrors Excalidraw's AppState.selectedElementIds structure.
+ */
 export type SelectionState = {
-  selectedIds: string[]
+  selectedIds: Record<string, true>
 }
 
 /**
@@ -17,7 +20,7 @@ export type SelectionState = {
  */
 export function createSelectionState(): SelectionState {
   return {
-    selectedIds: [],
+    selectedIds: {},
   }
 }
 
@@ -30,7 +33,7 @@ export function createSelectionState(): SelectionState {
 export function selectSingle(state: SelectionState, elementId: string): SelectionState {
   return {
     ...state,
-    selectedIds: [elementId],
+    selectedIds: { [elementId]: true },
   }
 }
 
@@ -41,34 +44,36 @@ export function selectSingle(state: SelectionState, elementId: string): Selectio
  * @returns A new `SelectionState` with the element added or removed.
  */
 export function toggleSelection(state: SelectionState, elementId: string): SelectionState {
-  const isSelected = state.selectedIds.includes(elementId)
-
-  if (isSelected) {
+  if (state.selectedIds[elementId]) {
+    const { [elementId]: _, ...rest } = state.selectedIds
     return {
       ...state,
-      selectedIds: state.selectedIds.filter((id) => id !== elementId),
+      selectedIds: rest,
     }
   }
 
   return {
     ...state,
-    selectedIds: [...state.selectedIds, elementId],
+    selectedIds: {
+      ...state.selectedIds,
+      [elementId]: true,
+    },
   }
 }
 
 /**
  * Clears the selection. Returns the input state unchanged when already empty.
  * @param state - The current selection state.
- * @returns A new `SelectionState` with an empty id list.
+ * @returns A new `SelectionState` with an empty id map.
  */
 export function clearSelection(state: SelectionState): SelectionState {
-  if (state.selectedIds.length === 0) {
+  if (Object.keys(state.selectedIds).length === 0) {
     return state
   }
 
   return {
     ...state,
-    selectedIds: [],
+    selectedIds: {},
   }
 }
 
@@ -79,7 +84,7 @@ export function clearSelection(state: SelectionState): SelectionState {
  * @returns `true` when the element is selected.
  */
 export function isSelected(state: SelectionState, elementId: string): boolean {
-  return state.selectedIds.includes(elementId)
+  return state.selectedIds[elementId] === true
 }
 
 /**
@@ -88,7 +93,7 @@ export function isSelected(state: SelectionState, elementId: string): boolean {
  * @returns The selection count.
  */
 export function getSelectedCount(state: SelectionState): number {
-  return state.selectedIds.length
+  return Object.keys(state.selectedIds).length
 }
 
 /**
@@ -97,7 +102,7 @@ export function getSelectedCount(state: SelectionState): number {
  * @returns `true` when at least one element is selected.
  */
 export function hasSelection(state: SelectionState): boolean {
-  return state.selectedIds.length > 0
+  return Object.keys(state.selectedIds).length > 0
 }
 
 /**
@@ -106,7 +111,17 @@ export function hasSelection(state: SelectionState): boolean {
  * @returns The first selected id or `null`.
  */
 export function getFirstSelectedId(state: SelectionState): string | null {
-  return state.selectedIds[0] ?? null
+  const ids = Object.keys(state.selectedIds)
+  return ids[0] ?? null
+}
+
+/**
+ * Returns all selected ids as an array.
+ * @param state - The current selection state.
+ * @returns Array of selected element ids.
+ */
+export function getSelectedIds(state: SelectionState): string[] {
+  return Object.keys(state.selectedIds)
 }
 
 /**
@@ -127,7 +142,7 @@ export function handleElementClick(
     return toggleSelection(state, elementId)
   }
 
-  if (state.selectedIds.includes(elementId) && state.selectedIds.length === 1) {
+  if (state.selectedIds[elementId] && Object.keys(state.selectedIds).length === 1) {
     return state
   }
 
@@ -149,11 +164,9 @@ export function selectMultiple(
   isShiftPressed: boolean,
 ): SelectionState {
   if (isShiftPressed) {
-    const newIds = [...state.selectedIds]
+    const newIds = { ...state.selectedIds }
     for (const id of elementIds) {
-      if (!newIds.includes(id)) {
-        newIds.push(id)
-      }
+      newIds[id] = true
     }
     return {
       ...state,
@@ -163,6 +176,78 @@ export function selectMultiple(
 
   return {
     ...state,
-    selectedIds: elementIds,
+    selectedIds: elementIds.reduce(
+      (acc, id) => {
+        acc[id] = true
+        return acc
+      },
+      {} as Record<string, true>,
+    ),
   }
+}
+
+/**
+ * Returns previous selectedIds if no change, to retain reference identity
+ * for memoization. Similar to Excalidraw's makeNextSelectedElementIds.
+ * @param nextSelectedIds - The new selection map.
+ * @param prevState - The previous state.
+ * @returns The previous selectedIds if identical, otherwise nextSelectedIds.
+ */
+export function makeNextSelectedIds(
+  nextSelectedIds: Record<string, true>,
+  prevState: SelectionState,
+): Record<string, true> {
+  const prevKeys = Object.keys(prevState.selectedIds)
+  const nextKeys = Object.keys(nextSelectedIds)
+
+  if (prevKeys.length !== nextKeys.length) {
+    return nextSelectedIds
+  }
+
+  for (const key of prevKeys) {
+    if (!nextSelectedIds[key]) {
+      return nextSelectedIds
+    }
+  }
+
+  return prevState.selectedIds
+}
+
+/**
+ * Helper: filter elements that are selected.
+ * @param elements - Array of elements with id property.
+ * @param state - The selection state.
+ * @returns Array of selected elements.
+ */
+export function filterSelectedElements<T extends { id: string }>(
+  elements: readonly T[],
+  state: SelectionState,
+): T[] {
+  return elements.filter((el) => state.selectedIds[el.id])
+}
+
+/**
+ * Helper: filter elements that are NOT selected.
+ * @param elements - Array of elements with id property.
+ * @param state - The selection state.
+ * @returns Array of non-selected elements.
+ */
+export function filterNonSelectedElements<T extends { id: string }>(
+  elements: readonly T[],
+  state: SelectionState,
+): T[] {
+  return elements.filter((el) => !state.selectedIds[el.id])
+}
+
+/**
+ * Helper: check if any of the given elements are selected.
+ * @param elements - Array of elements with id property.
+ * @param state - The selection state.
+ * @returns True if at least one element is selected.
+ */
+export function someElementSelected<T extends { id: string }>(
+  elements: readonly T[],
+  state: SelectionState,
+): boolean {
+  return elements.some((el) => state.selectedIds[el.id])
 }

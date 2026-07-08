@@ -1,6 +1,16 @@
 import { useState, useCallback } from 'react'
 import { cloneScene, type Scene, type SelectionState } from '@/domain'
 
+function arrayToSelectionMap(ids: string[]): Record<string, true> {
+  return ids.reduce(
+    (acc, id) => {
+      acc[id] = true
+      return acc
+    },
+    {} as Record<string, true>,
+  )
+}
+
 const MAX_HISTORY_SIZE = 50
 
 type HistoryEntry = {
@@ -67,7 +77,7 @@ export function useHistory(options: UseHistoryOptions) {
     }))
 
     setScene(previous.scene)
-    setSelection((prev) => ({ ...prev, selectedIds: previous.selectedIds }))
+    setSelection((prev) => ({ ...prev, selectedIds: arrayToSelectionMap(previous.selectedIds) }))
     setStatus(`已撤销：${previous.description}`)
   }, [history.past, scene, selectedIds, setScene, setSelection, setStatus])
 
@@ -93,7 +103,7 @@ export function useHistory(options: UseHistoryOptions) {
     }))
 
     setScene(next.scene)
-    setSelection((prev) => ({ ...prev, selectedIds: next.selectedIds }))
+    setSelection((prev) => ({ ...prev, selectedIds: arrayToSelectionMap(next.selectedIds) }))
     setStatus(`已重做：${next.description}`)
   }, [history.future, scene, selectedIds, setScene, setSelection, setStatus])
 

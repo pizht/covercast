@@ -8,6 +8,9 @@ import {
   type SceneElement,
   createSelectionState,
   selectSingle,
+  getFirstSelectedId,
+  getSelectedCount,
+  getSelectedIds,
   type SelectionState,
   type HitTestStrategy,
 } from '@/domain'
@@ -44,6 +47,7 @@ type SidebarSectionId = 'scene' | 'sources' | 'templates' | 'layers'
 export default function SceneEditor() {
   const [scene, setScene] = useState<Scene>(() => createDefaultScene())
   const [selection, setSelection] = useState<SelectionState>(() => createSelectionState())
+  const selectedIdsArray = useMemo(() => getSelectedIds(selection), [selection.selectedIds])
   const [hitTestStrategy] = useState<HitTestStrategy>('intersection')
   const [status, setStatus] = useState('正在读取本地场景...')
   const [appOrigin, setAppOrigin] = useState('')
@@ -99,7 +103,7 @@ export default function SceneEditor() {
   })
   const { history, saveHistory, undo, redo } = useHistory({
     scene,
-    selectedIds: selection.selectedIds,
+    selectedIds: selectedIdsArray,
     setScene,
     setSelection,
     setStatus,
@@ -236,16 +240,16 @@ export default function SceneEditor() {
   })
 
   const selectedElement = useMemo(() => {
-    if (selection.selectedIds.length !== 1) {
+    if (getSelectedCount(selection) !== 1) {
       return null
     }
-    return scene.elements.find((element) => element.id === selection.selectedIds[0]) ?? null
+    return scene.elements.find((element) => element.id === getFirstSelectedId(selection)) ?? null
   }, [scene.elements, selection.selectedIds])
 
   const { visibleGuides, visibleSpacingGuides } = useVisibleGuides(
     guides,
     spacingGuides,
-    selection.selectedIds,
+    selectedIdsArray,
     guidesSelectedIds,
   )
 
@@ -292,7 +296,7 @@ export default function SceneEditor() {
   } = useClipboard({
     selectedElementRef,
     sceneElementsRef,
-    selectedIds: selection.selectedIds,
+    selectedIds: selectedIdsArray,
     changeScene,
     setSelection,
     markSceneEdited,
@@ -470,7 +474,7 @@ export default function SceneEditor() {
             handleStageWheel={handleStageWheel}
             stageViewportRef={stageViewportRef}
             scene={scene}
-            selectedIds={selection.selectedIds}
+            selectedIds={selectedIdsArray}
             guides={visibleGuides}
             spacingGuides={visibleSpacingGuides}
             resizeLabel={resizeLabel}

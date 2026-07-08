@@ -9,6 +9,11 @@ import {
   SpatialIndex,
   buildSpatialIndex,
   computeBoundingBox,
+  hasSelection,
+  getSelectedCount,
+  getSelectedIds,
+  filterSelectedElements,
+  filterNonSelectedElements,
   type SelectionState,
 } from '@/domain'
 
@@ -98,7 +103,7 @@ export function useEditorShortcuts(options: UseEditorShortcutsOptions) {
           return
         }
 
-        if (selection.selectedIds.length === 0) {
+        if (!hasSelection(selection)) {
           return
         }
 
@@ -112,14 +117,14 @@ export function useEditorShortcuts(options: UseEditorShortcutsOptions) {
           return
         }
 
-        if (selection.selectedIds.length === 0) {
+        if (!hasSelection(selection)) {
           return
         }
 
         event.preventDefault()
 
         const selectedElements = scene.elements.filter(
-          (el) => selection.selectedIds.includes(el.id) && !el.locked,
+          (el) => selection.selectedIds[el.id] && !el.locked,
         )
 
         if (selectedElements.length === 0) {
@@ -147,13 +152,13 @@ export function useEditorShortcuts(options: UseEditorShortcutsOptions) {
         }
 
         const otherElements = scene.elements.filter(
-          (el) => !selection.selectedIds.includes(el.id) && !el.locked && el.hidden !== true,
+          (el) => !selection.selectedIds[el.id] && !el.locked && el.hidden !== true,
         )
         spatialIndexRef.current = buildSpatialIndex(otherElements)
 
         setScene((currentScene) => {
           const updatedElements = currentScene.elements.map((element) => {
-            if (!selection.selectedIds.includes(element.id) || element.locked) {
+            if (!selection.selectedIds[element.id] || element.locked) {
               return element
             }
 
@@ -165,7 +170,7 @@ export function useEditorShortcuts(options: UseEditorShortcutsOptions) {
           })
 
           const updatedSelectedElements = updatedElements.filter(
-            (el) => selection.selectedIds.includes(el.id) && !el.locked,
+            (el) => selection.selectedIds[el.id] && !el.locked,
           )
 
           if (updatedSelectedElements.length > 0) {
@@ -176,7 +181,7 @@ export function useEditorShortcuts(options: UseEditorShortcutsOptions) {
               spatialIndexRef.current,
             )
 
-            setGuidesSelectedIds(selection.selectedIds)
+            setGuidesSelectedIds(getSelectedIds(selection))
             setGuides(guides)
             setSpacingGuides(spacingGuides)
           }
@@ -201,14 +206,14 @@ export function useEditorShortcuts(options: UseEditorShortcutsOptions) {
       }
 
       if (arrowKeys.includes(event.key)) {
-        if (selection.selectedIds.length === 0) {
+        if (!hasSelection(selection)) {
           return
         }
 
         event.preventDefault()
 
         const selectedElements = scene.elements.filter(
-          (el) => selection.selectedIds.includes(el.id) && !el.locked,
+          (el) => selection.selectedIds[el.id] && !el.locked,
         )
 
         if (selectedElements.length === 0) {
@@ -236,13 +241,13 @@ export function useEditorShortcuts(options: UseEditorShortcutsOptions) {
         }
 
         const otherElements = scene.elements.filter(
-          (el) => !selection.selectedIds.includes(el.id) && !el.locked && el.hidden !== true,
+          (el) => !selection.selectedIds[el.id] && !el.locked && el.hidden !== true,
         )
         spatialIndexRef.current = buildSpatialIndex(otherElements)
 
         setScene((currentScene) => {
           const updatedElements = currentScene.elements.map((element) => {
-            if (!selection.selectedIds.includes(element.id) || element.locked) {
+            if (!selection.selectedIds[element.id] || element.locked) {
               return element
             }
 
@@ -254,7 +259,7 @@ export function useEditorShortcuts(options: UseEditorShortcutsOptions) {
           })
 
           const updatedSelectedElements = updatedElements.filter(
-            (el) => selection.selectedIds.includes(el.id) && !el.locked,
+            (el) => selection.selectedIds[el.id] && !el.locked,
           )
 
           if (updatedSelectedElements.length > 0) {
@@ -265,7 +270,7 @@ export function useEditorShortcuts(options: UseEditorShortcutsOptions) {
               spatialIndexRef.current,
             )
 
-            setGuidesSelectedIds(selection.selectedIds)
+            setGuidesSelectedIds(getSelectedIds(selection))
             setGuides(guides)
             setSpacingGuides(spacingGuides)
           }
@@ -283,7 +288,7 @@ export function useEditorShortcuts(options: UseEditorShortcutsOptions) {
         return
       }
 
-      if (key === 'c' && selection.selectedIds.length > 0) {
+      if (key === 'c' && hasSelection(selection)) {
         event.preventDefault()
         copySelectedElements()
         return
