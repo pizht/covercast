@@ -8,7 +8,7 @@ import { CoverEllipseShapeUtil } from './shapes/CoverEllipseShapeUtil'
 import { CoverImageShapeUtil } from './shapes/CoverImageShapeUtil'
 import { CoverTextShapeUtil } from './shapes/CoverTextShapeUtil'
 import { CoverBackgroundShapeUtil } from './shapes/CoverBackgroundShapeUtil'
-import { loadSceneIntoEditor } from './bridge/sceneToTldraw'
+import { loadSceneIntoEditor, syncSceneToEditor } from './bridge/sceneToTldraw'
 import { editorToScene } from './bridge/tldrawToScene'
 import { DEFAULT_CANVAS_WIDTH, DEFAULT_CANVAS_HEIGHT, type Scene } from '@/domain'
 
@@ -99,6 +99,9 @@ export function CovercastEditor({
       },
     })
 
+    // Enable smart guides / snapping — background shape's edges act as canvas-edge snap targets
+    editor.user.updateUserPreferences({ isSnapMode: true })
+
     editor.zoomToBounds(
       { x: 0, y: 0, w: canvasWidth, h: canvasHeight },
       { animation: { duration: 0 } },
@@ -181,9 +184,9 @@ export function CovercastEditor({
       debounceRef.current = null
     }
 
-    // Suppress selection + scene sync callbacks during reload
+    // Suppress selection + scene sync callbacks during sync
     isReloadingRef.current = true
-    loadSceneIntoEditor(editor, scene, canvasWidth, canvasHeight, resolveSrcRef.current)
+    syncSceneToEditor(editor, scene, canvasWidth, canvasHeight, resolveSrcRef.current)
 
     // Re-select shapes by matching originalId
     if (selectedElementIds.length > 0) {

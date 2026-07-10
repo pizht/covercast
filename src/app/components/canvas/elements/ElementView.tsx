@@ -7,7 +7,7 @@ import { ImageElementView } from './ImageElementView'
 export function ElementView({
   element,
   idPrefix,
-  interactive,
+  interactive = false,
   editingTextId,
   onPointerDown,
   onDoubleClick,
@@ -15,7 +15,7 @@ export function ElementView({
 }: {
   element: SceneElement
   idPrefix: string
-  interactive: boolean
+  interactive?: boolean
   editingTextId?: string | null
   onPointerDown?: (elementId: string, event: PointerEvent<SVGGElement>) => void
   onDoubleClick?: (elementId: string) => void

@@ -3,32 +3,23 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { type Editor } from 'tldraw'
 import {
-  cloneScene,
   createDefaultScene,
   type Scene,
   type SceneElement,
   createSelectionState,
-  selectSingle,
   type SelectionState,
-  type HitTestStrategy,
 } from '@/domain'
 import editorStyles from './editor/editor.module.css'
 import { useScrollVisibility } from '../lib/use-scroll-visibility'
 import { usePanelResize } from '../lib/use-panel-resize'
-import { useHistory } from '../hooks/useHistory'
-import { useClipboard } from '../hooks/useClipboard'
-import { useEditorShortcuts } from '../hooks/useEditorShortcuts'
-import { useCanvasZoom } from '../hooks/useCanvasZoom'
 import { useCanvasSize } from '../hooks/useCanvasSize'
 import { useTemplateManager } from '../hooks/useTemplateManager'
 import { useSlotManager } from '../hooks/useSlotManager'
-import { useDragManager } from '../hooks/useDragManager'
-import { useMarqueeSelection } from '../hooks/useMarqueeSelection'
 import { useExportScene, type ExportFormat, EXPORT_FORMAT_OPTIONS } from '../hooks/useExportScene'
 import { useSceneActions } from '../hooks/useSceneActions'
 import { useAssetManager } from '../hooks/useAssetManager'
 import { useSceneLoader } from '../hooks/useSceneLoader'
-import { useVisibleGuides } from '../hooks/useVisibleGuides'
+import { useClipboard } from '../hooks/useClipboard'
 import { useLocalFonts } from '../hooks/useLocalFonts'
 import { useLocalAssets } from '../hooks/useLocalAssets'
 import { useCreateBlankCover } from '../hooks/useCreateBlankCover'
@@ -45,13 +36,9 @@ type SidebarSectionId = 'scene' | 'sources' | 'templates' | 'layers'
 export default function SceneEditor() {
   const [scene, setScene] = useState<Scene>(() => createDefaultScene())
   const [selection, setSelection] = useState<SelectionState>(() => createSelectionState())
-  const [hitTestStrategy] = useState<HitTestStrategy>('intersection')
   const [status, setStatus] = useState('正在读取本地场景...')
   const [appOrigin, setAppOrigin] = useState('')
   const [exportFormat, setExportFormat] = useState<ExportFormat>('png')
-  const [guidesSelectedIds, setGuidesSelectedIds] = useState<string[]>([])
-  const [canvasEngine, setCanvasEngine] = useState<'svg' | 'tldraw'>('svg')
-  const svgRef = useRef<SVGSVGElement>(null)
   const tldrawEditorRef = useRef<Editor | null>(null)
   const sceneElementsRef = useRef<SceneElement[]>(scene.elements)
   const selectedElementRef = useRef<SceneElement | null>(null)
@@ -61,7 +48,6 @@ export default function SceneEditor() {
     templates: false,
     layers: false,
   })
-  const [editingTextId, setEditingTextId] = useState<string | null>(null)
 
   // 编辑器加载时立即恢复本地字体
   const localFontManager = useLocalFonts()
@@ -85,31 +71,6 @@ export default function SceneEditor() {
     presets,
   } = useCanvasSize()
 
-  const {
-    canvasZoom,
-    canvasPreviewWidth,
-    canvasZoomPercent,
-    setCanvasZoomLevel,
-    zoomCanvasIn,
-    zoomCanvasOut,
-    resetCanvasZoom,
-    handleStageWheel,
-    handleZoomSliderWheel,
-    CANVAS_ZOOM_MIN,
-    CANVAS_ZOOM_MAX,
-    CANVAS_ZOOM_STEP,
-  } = useCanvasZoom({
-    stageViewportRef,
-    canvasWidth: canvasSize.width,
-    canvasHeight: canvasSize.height,
-  })
-  const { history, saveHistory, undo, redo } = useHistory({
-    scene,
-    selectedIds: selection.selectedIds,
-    setScene,
-    setSelection,
-    setStatus,
-  })
   const {
     templateSlots,
     activeSlotId,
@@ -206,54 +167,12 @@ export default function SceneEditor() {
     customTemplatesRef.current = customTemplates
   }, [customTemplates, customTemplatesRef])
 
-  const { marquee, handleCanvasPointerDown } = useMarqueeSelection({
-    svgRef,
-    sceneElementsRef,
-    hitTestStrategy,
-    editingTextId,
-    setSelection,
-    setEditingTextId,
-  })
-
-  const {
-    drag,
-    guides,
-    spacingGuides,
-    resizeLabel,
-    spatialIndexRef,
-    setGuides,
-    setSpacingGuides,
-    handleElementPointerDown,
-    handleResizePointerDown,
-    handleGroupResizePointerDown,
-    handleGroupDragPointerDown,
-  } = useDragManager({
-    scene,
-    selection,
-    editingTextId,
-    svgRef,
-    saveHistory,
-    markSceneEdited,
-    setScene,
-    setSelection,
-    setEditingTextId,
-    canvasWidth: canvasSize.width,
-    canvasHeight: canvasSize.height,
-  })
-
   const selectedElement = useMemo(() => {
     if (selection.selectedIds.length !== 1) {
       return null
     }
     return scene.elements.find((element) => element.id === selection.selectedIds[0]) ?? null
   }, [scene.elements, selection.selectedIds])
-
-  const { visibleGuides, visibleSpacingGuides } = useVisibleGuides(
-    guides,
-    spacingGuides,
-    selection.selectedIds,
-    guidesSelectedIds,
-  )
 
   useEffect(() => {
     sceneElementsRef.current = scene.elements
@@ -277,36 +196,28 @@ export default function SceneEditor() {
     }))
   }
 
+  // changeScene — no saveHistory (tldraw handles undo/redo)
   const changeScene = useCallback(
-    (updater: (currentScene: Scene) => Scene, description?: string) => {
-      if (description) {
-        const currentSceneSnapshot = cloneScene(scene)
-        saveHistory(description, currentSceneSnapshot)
-      }
+    (updater: (currentScene: Scene) => Scene) => {
       setScene(updater)
       markSceneEdited()
     },
-    [scene, saveHistory, markSceneEdited],
+    [markSceneEdited],
   )
 
   // tldraw → Scene sync (debounced inside CovercastEditor)
-  // Does NOT call saveHistory — tldraw has its own undo/redo
-  // Preserves hidden elements in their original layer order — they're not in
-  // tldraw but must stay in Scene at their original position
+  // Preserves hidden elements in their original layer order
   const handleTldrawSceneChange = useCallback(
     (newScene: Scene) => {
       setScene((prev) => {
         const newElementsMap = new Map(newScene.elements.map((el) => [el.id, el]))
         const prevIds = new Set(prev.elements.map((el) => el.id))
 
-        // Walk prev.elements in order: replace visible with tldraw version,
-        // keep hidden elements as-is at their original position
         const merged = prev.elements.map((el) => {
           const updated = newElementsMap.get(el.id)
           return updated ?? el
         })
 
-        // Append elements created in tldraw that don't exist in prev
         const newElements = newScene.elements.filter((el) => !prevIds.has(el.id))
 
         return {
@@ -329,30 +240,16 @@ export default function SceneEditor() {
     tldrawEditorRef.current = editor
   }, [])
 
-  // Undo/redo — switches engine based on canvas mode
+  // Undo/redo — tldraw native
   const handleUndo = useCallback(() => {
-    if (canvasEngine === 'tldraw') {
-      tldrawEditorRef.current?.undo()
-    } else {
-      undo()
-    }
-  }, [canvasEngine, undo])
+    tldrawEditorRef.current?.undo()
+  }, [])
 
   const handleRedo = useCallback(() => {
-    if (canvasEngine === 'tldraw') {
-      tldrawEditorRef.current?.redo()
-    } else {
-      redo()
-    }
-  }, [canvasEngine, redo])
+    tldrawEditorRef.current?.redo()
+  }, [])
 
-  const {
-    elementClipboardRef,
-    elementsClipboardRef,
-    canPasteElement,
-    copySelectedElements,
-    pasteCopiedElements,
-  } = useClipboard({
+  const { canPasteElement, copySelectedElements, pasteCopiedElements } = useClipboard({
     selectedElementRef,
     sceneElementsRef,
     selectedIds: selection.selectedIds,
@@ -381,27 +278,6 @@ export default function SceneEditor() {
     setSelection,
   })
 
-  useEditorShortcuts({
-    scene,
-    selection,
-    editingTextId,
-    undo,
-    redo,
-    copySelectedElements,
-    pasteCopiedElements,
-    deleteSelected,
-    selectedElementRef,
-    elementClipboardRef,
-    elementsClipboardRef,
-    spatialIndexRef,
-    setGuidesSelectedIds,
-    setGuides,
-    setSpacingGuides,
-    setScene,
-    markSceneEdited,
-    disabled: canvasEngine === 'tldraw',
-  })
-
   const { handleAssetInput } = useAssetManager({
     setStatus,
     selectedElement,
@@ -417,16 +293,6 @@ export default function SceneEditor() {
     setActiveTemplateId,
     setSelection,
   })
-
-  function handleTextElementDoubleClick(elementId: string) {
-    const element = scene.elements.find((item) => item.id === elementId)
-    if (!element || element.type !== 'text') {
-      return
-    }
-
-    setSelection(selectSingle(selection, elementId))
-    setEditingTextId(elementId)
-  }
 
   return (
     <>
@@ -444,8 +310,8 @@ export default function SceneEditor() {
         <SceneToolbar
           undo={handleUndo}
           redo={handleRedo}
-          canUndo={canvasEngine === 'tldraw' ? true : history.past.length > 0}
-          canRedo={canvasEngine === 'tldraw' ? true : history.future.length > 0}
+          canUndo={true}
+          canRedo={true}
           addTextElement={addTextElement}
           addRectElement={addRectElement}
           addEllipseElement={addEllipseElement}
@@ -520,44 +386,15 @@ export default function SceneEditor() {
 
           <StagePanel
             status={status}
-            canvasEngine={canvasEngine}
-            onCanvasEngineChange={setCanvasEngine}
-            onSceneChange={handleTldrawSceneChange}
-            onSelectionChange={handleTldrawSelectionChange}
-            onEditorReady={handleTldrawEditorReady}
-            srcVersion={srcVersion}
-            canvasZoom={canvasZoom}
-            canvasZoomPercent={canvasZoomPercent}
-            canvasPreviewWidth={canvasPreviewWidth}
-            CANVAS_ZOOM_MIN={CANVAS_ZOOM_MIN}
-            CANVAS_ZOOM_MAX={CANVAS_ZOOM_MAX}
-            CANVAS_ZOOM_STEP={CANVAS_ZOOM_STEP}
-            setCanvasZoomLevel={setCanvasZoomLevel}
-            zoomCanvasIn={zoomCanvasIn}
-            zoomCanvasOut={zoomCanvasOut}
-            resetCanvasZoom={resetCanvasZoom}
-            handleZoomSliderWheel={handleZoomSliderWheel}
-            handleStageWheel={handleStageWheel}
-            stageViewportRef={stageViewportRef}
             scene={scene}
-            selectedIds={selection.selectedIds}
-            guides={visibleGuides}
-            spacingGuides={visibleSpacingGuides}
-            resizeLabel={resizeLabel}
-            svgRef={svgRef}
-            marquee={marquee}
-            hitTestStrategy={hitTestStrategy}
-            editingTextId={editingTextId}
-            isGroupDragging={drag?.mode === 'group-move'}
             canvasWidth={canvasSize.width}
             canvasHeight={canvasSize.height}
             resolveSrc={resolveSrc}
-            onCanvasPointerDown={handleCanvasPointerDown}
-            onElementPointerDown={handleElementPointerDown}
-            onResizePointerDown={handleResizePointerDown}
-            onGroupDragPointerDown={handleGroupDragPointerDown}
-            onGroupResizePointerDown={handleGroupResizePointerDown}
-            onTextElementDoubleClick={handleTextElementDoubleClick}
+            srcVersion={srcVersion}
+            onSceneChange={handleTldrawSceneChange}
+            onSelectionChange={handleTldrawSelectionChange}
+            onEditorReady={handleTldrawEditorReady}
+            stageViewportRef={stageViewportRef}
           />
 
           <div

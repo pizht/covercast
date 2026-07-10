@@ -187,9 +187,8 @@ function imageElementToShape(el: ImageElement, resolveSrc?: ResolveSrcFn): TLSha
 }
 
 /**
- * Loads Scene elements into the tldraw editor.
- * Clears existing shapes on the current page first.
- * Adds a background shape as the lowest z-index layer.
+ * Loads Scene elements into the tldraw editor (full reload).
+ * Used for initial mount. Clears existing shapes and recreates all.
  */
 export function loadSceneIntoEditor(
   editor: Editor,
@@ -207,4 +206,85 @@ export function loadSceneIntoEditor(
   const elementShapes = sceneToTldrawShapes(scene, resolveSrc)
 
   editor.createShapes([bgShape, ...elementShapes])
+}
+
+/**
+ * Incrementally syncs Scene changes to the tldraw editor.
+ * Instead of deleting + recreating all shapes, only creates/updates/deletes
+ * the shapes that actually changed. Uses meta.originalId for matching.
+ *
+ * All changes are batched in a single editor.run() call.
+ */
+export function syncSceneToEditor(
+  editor: Editor,
+  scene: Scene,
+  canvasWidth: number,
+  canvasHeight: number,
+  resolveSrc?: ResolveSrcFn,
+) {
+  const currentShapes = editor.getCurrentPageShapes()
+
+  // Index current shapes by originalId (skip background)
+  const currentMap = new Map<string, TLShape>()
+  let currentBg: TLShape | null = null
+  for (const shape of currentShapes) {
+    if (shape.type === 'cover-background') {
+      currentBg = shape
+    } else {
+      const meta = shape.meta as { originalId?: string }
+      if (meta?.originalId) currentMap.set(meta.originalId, shape)
+    }
+  }
+
+  // Build new shapes from scene
+  const newShapes = sceneToTldrawShapes(scene, resolveSrc)
+  const newBg = createBackgroundShape(scene, canvasWidth, canvasHeight)
+
+  // Track IDs present in the new scene
+  const newIds = new Set<string>()
+
+  const toUpdate: TLShape[] = []
+  const toCreate: TLShape[] = []
+
+  for (const newShape of newShapes) {
+    const meta = newShape.meta as { originalId?: string }
+    const originalId = meta.originalId!
+    newIds.add(originalId)
+
+    const existing = currentMap.get(originalId)
+    if (existing) {
+      // Update: reuse existing tldraw shape ID, overwrite props/position
+      toUpdate.push({
+        ...newShape,
+        id: existing.id,
+      } as unknown as TLShape)
+    } else {
+      toCreate.push(newShape)
+    }
+  }
+
+  // Delete shapes no longer in scene (or hidden — sceneToTldrawShapes skips them)
+  const toDelete: TLShapeId[] = []
+  for (const [originalId, shape] of currentMap) {
+    if (!newIds.has(originalId)) {
+      toDelete.push(shape.id)
+    }
+  }
+
+  // Update or create background
+  if (currentBg) {
+    toUpdate.push({
+      ...newBg,
+      id: currentBg.id,
+    } as unknown as TLShape)
+  } else {
+    toCreate.push(newBg)
+  }
+
+  // Apply all changes in a single batched transaction
+  editor.run(() => {
+    if (toDelete.length > 0) editor.deleteShapes(toDelete)
+    if (toCreate.length > 0) editor.createShapes(toCreate)
+    if (toUpdate.length > 0) editor.updateShapes(toUpdate)
+  })
 }
